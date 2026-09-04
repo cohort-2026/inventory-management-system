@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
-import { getHello } from '../services/api';
+import Navbar from "../components/NavBar";
 
 export default function Login() {
   return (
     <div style={{ padding: '2rem', fontFamily: 'sans-serif' }}>
+      <Navbar/>
       <h1>Inventory Management System</h1>
       <p>Welcome to the Login page!</p>
 
