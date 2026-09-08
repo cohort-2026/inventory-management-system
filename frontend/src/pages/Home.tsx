@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getHello } from '../services/api';
+import Navbar from '../components/NavBar';
 
 export default function Home() {
   const [message, setMessage] = useState('Connecting to backend...');
@@ -13,6 +14,7 @@ export default function Home() {
 
   return (
     <div style={{ padding: '2rem', fontFamily: 'sans-serif' }}>
+      <Navbar/>
       <h1>Inventory Management System</h1>
       {error ? <p style={{ color: 'red' }}>{error}</p> : <p>{message}</p>}
     </div>

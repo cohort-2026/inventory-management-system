@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
-import {getHello} from 'react';
 import { Link } from 'react-router-dom';
+import Navbar from '../components/NavBar';
 
 
 export default function TransferStock() {
   return ( 
       <div style={{padding: '2rem', fontFamily: 'sans-serif' }}>
+        <Navbar/>
         <h1>Transfer Stock</h1>
         
 
