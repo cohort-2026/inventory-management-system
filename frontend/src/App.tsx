@@ -5,20 +5,37 @@ import NotFound from './pages/NotFound';
 import CreateProduct from './pages/CreateProduct';
 import AdjustStock from './pages/AdjustStock';
 import TransferStock from './pages/TransferStock'
+import InventoryOverview from './pages/InventoryOverview';
+import InventoryCount from './pages/InventoryCount';
+import StockMovementHistory from './pages/StockMovementHistory';
+import Dashboard from './pages/Dashboard';
+import { AuthProvider } from './utils/AuthContext';
+import ProtectedRoute from './components/ProtectedRoutes';
 
 function App() {
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="*" element={<NotFound />} />
-        <Route path="/adjust_stock" element={<AdjustStock />} />
-        <Route path="/transfer_stock" element={<TransferStock />} />
-        <Route path="/createproduct" element={<CreateProduct />} />
-      </Routes>
-    </BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="*" element={<NotFound />} />
+          <Route path="/create_product" element={<CreateProduct />} />
+          <Route path="/adjust_stock" element={<AdjustStock />} />
+          <Route path="/transfer_stock" element={<TransferStock />} />
+          <Route path="/inventory_overview" element={<InventoryOverview />} />
+          <Route path="/inventory_count" element={<InventoryCount />} />
+          <Route path="/stock_movement_history" element={<StockMovementHistory />} />
+
+          <Route path="/dashboard" element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          } />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   )
 }
 
