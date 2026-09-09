@@ -36,14 +36,11 @@ function App() {
               <TransferStock />
             </ProtectedRoute>
           } />
-          <Route path="/create_product" element={   
+          <Route path="/inventory_overview" element={
             <ProtectedRoute>
-              <CreateProduct />
+              <InventoryOverview />
             </ProtectedRoute>
           } />
-          <Route path="/adjust_stock" element={<AdjustStock />} />
-          <Route path="/transfer_stock" element={<TransferStock />} />
-          <Route path="/inventory_overview" element={<InventoryOverview />} />
           <Route path="/inventory_count" element={
             <ProtectedRoute>   
               <InventoryCount />
