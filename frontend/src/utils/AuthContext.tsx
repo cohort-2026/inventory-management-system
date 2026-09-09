@@ -1,13 +1,21 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { data, useNavigate } from "react-router-dom";
 
 type User = { username: string } | null;
 
 type AuthContextType = {
     user: User;
     loading: boolean;
+    login: (username: string, password: string) => Promise<void>;
+    logout: () => Promise<void>;
 };
 
-const AuthContext = createContext<AuthContextType>({ user: null, loading: true });
+const AuthContext = createContext<AuthContextType>({
+    user: null,
+    loading: true,
+    login: async () => {},
+    logout: async () => {}
+});
 
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User>(null);
@@ -20,12 +28,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             .finally(() => setLoading(false));
     }, []);
 
+    async function login(username: string, password: string) {
+        const res = await fetch("http://localhost:5000/api/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ username, password }),
+        });
+    
+        if (!res.ok) {
+          const data = await res.json();
+          console.log("Login failed");
+          throw new Error(data.error || "Login failed");
+        }
+    
+        setUser({ username });
+    }
+
+    async function logout() {
+        await fetch("http://localhost:5000/api/logout", {
+            method: "POST",
+            credentials: "include",
+        });
+        setUser(null);
+    }
+
     return (
-        <AuthContext.Provider value={{ user, loading }}>
+        <AuthContext.Provider value={{ user, loading, login, logout }}>
             {children}
         </AuthContext.Provider>
     );
 }
+
 
 export function useAuth() {
     return useContext(AuthContext);

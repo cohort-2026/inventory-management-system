@@ -21,7 +21,11 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="*" element={<NotFound />} />
-          <Route path="/create_product" element={<CreateProduct />} />
+          <Route path="/create_product" element={   
+            <ProtectedRoute>
+              <CreateProduct />
+            </ProtectedRoute>
+          } />
           <Route path="/adjust_stock" element={
             <ProtectedRoute>
               <AdjustStock />
@@ -32,14 +36,11 @@ function App() {
               <TransferStock />
             </ProtectedRoute>
           } />
-          <Route path="/create_product" element={   
+          <Route path="/inventory_overview" element={
             <ProtectedRoute>
-              <CreateProduct />
+              <InventoryOverview />
             </ProtectedRoute>
           } />
-          <Route path="/adjust_stock" element={<AdjustStock />} />
-          <Route path="/transfer_stock" element={<TransferStock />} />
-          <Route path="/inventory_overview" element={<InventoryOverview />} />
           <Route path="/inventory_count" element={
             <ProtectedRoute>   
               <InventoryCount />
