@@ -30,4 +30,9 @@ router.get('/me', requireAuth, (req, res) => {
     res.json({ user: (req as any).user });
 });
 
+router.post('/logout', (req, res) => {
+    res.clearCookie('token');
+    res.json({ message: 'Logged out' });
+});
+
 export default router;
