@@ -1,29 +1,26 @@
 import Navbar from "../components/NavBar";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../utils/AuthContext";
 
 export default function Login() {
+  const { login } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
   async function handleSubmit(e: React.FormEvent) {
+    console.log("Submitting login form");
+
     e.preventDefault();
     setError("");
 
-    const res = await fetch("http://localhost:5000/api/login", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      credentials: "include",
-      body: JSON.stringify({ username, password }),
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      setError(data.message || "Login failed");
+    try {
+      await login(username, password);
       navigate("/dashboard");
-      return;
+    } catch (err) {
+      setError("Login failed");
     }
   }
   return (
