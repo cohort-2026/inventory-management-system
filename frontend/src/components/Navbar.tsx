@@ -24,6 +24,7 @@ export default function Navbar() {
 
       <div>
         <button type="button">John Smith ▼</button>
+        <LogoutButton />
       </div>
     </nav>
   );
