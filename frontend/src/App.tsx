@@ -26,6 +26,21 @@ function App() {
               <CreateProduct />
             </ProtectedRoute>
           } />
+          <Route path="/adjust_stock" element={
+            <ProtectedRoute>
+              <AdjustStock />
+            </ProtectedRoute>
+          } />
+          <Route path="/transfer_stock" element={
+            <ProtectedRoute>
+              <TransferStock />
+            </ProtectedRoute>
+          } />
+          <Route path="/create_product" element={   
+            <ProtectedRoute>
+              <CreateProduct />
+            </ProtectedRoute>
+          } />
           <Route path="/adjust_stock" element={<AdjustStock />} />
           <Route path="/transfer_stock" element={<TransferStock />} />
           <Route path="/inventory_overview" element={<InventoryOverview />} />
