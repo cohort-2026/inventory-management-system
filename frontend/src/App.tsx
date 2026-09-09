@@ -22,8 +22,16 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="*" element={<NotFound />} />
           <Route path="/create_product" element={<CreateProduct />} />
-          <Route path="/adjust_stock" element={<AdjustStock />} />
-          <Route path="/transfer_stock" element={<TransferStock />} />
+          <Route path="/adjust_stock" element={
+            <ProtectedRoute>
+              <AdjustStock />
+            </ProtectedRoute>
+          } />
+          <Route path="/transfer_stock" element={
+            <ProtectedRoute>
+              <TransferStock />
+            </ProtectedRoute>
+          } />
           <Route path="/inventory_overview" element={<InventoryOverview />} />
           <Route path="/inventory_count" element={<InventoryCount />} />
           <Route path="/stock_movement_history" element={<StockMovementHistory />} />
