@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import LogoutButton from "./LogoutButton";
 
 export default function Navbar() {
   return (
@@ -24,6 +25,7 @@ export default function Navbar() {
 
       <div>
         <button type="button">John Smith ▼</button>
+        <LogoutButton />
       </div>
     </nav>
   );

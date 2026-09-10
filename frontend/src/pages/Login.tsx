@@ -3,6 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../utils/AuthContext";
 import Field from "../components/Field";
 import Button from "../components/Button";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../utils/AuthContext";
 
 export default function Login() {
   const { login } = useAuth();
