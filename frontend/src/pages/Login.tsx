@@ -1,5 +1,8 @@
-import Navbar from "../components/NavBar";
 import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../utils/AuthContext";
+import Field from "../components/Field";
+import Button from "../components/Button";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../utils/AuthContext";
 
@@ -24,32 +27,41 @@ export default function Login() {
     }
   }
   return (
-    <div style={{ padding: '2rem', fontFamily: 'sans-serif' }}>
-      <Navbar/>
-      <h1>Inventory Management System</h1>
-      <p>Welcome to the Login page!</p>
+    <div className="auth-page">
+      <div className="auth-card">
+        <div className="auth-brand">
+          <span className="auth=brand-mark" />
+            <h1>Inventory Management System</h1>
+        </div>
+
+      <p className="auth-subtitle">Welcome back</p>
 
       <form onSubmit={handleSubmit}>
-        <div>
-          <label>Username</label>
-          <input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            required
-          />
-        </div>
-        <div>
-          <label>Password</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-        </div>
-        {error && <p style={{ color: 'red' }}>{error}</p>}
-        <button type="submit">Log in</button>
+        
+        <Field
+          label="Username"
+          type="text"
+          placeholder="admin"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          required
+        />
+
+        <Field
+          label="Password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+        />
+
+        {error && <p className="field-error">{error}</p>}
+
+        <Button type="submit" className="auth-submit">Sign In</Button>
       </form>
+
+      <Link to="/forgot-password" className="auth-link">Forgot Password?</Link>
+    </div>
     </div>
   );
 }
