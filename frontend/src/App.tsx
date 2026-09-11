@@ -13,6 +13,7 @@ import InventoryOverview from './pages/InventoryOverview';
 import InventoryCount from './pages/InventoryCount';
 import StockMovementHistory from './pages/StockMovementHistory';
 import Dashboard from './pages/Dashboard';
+import Register from './pages/Register';
 
 function App() {
   return (
@@ -22,7 +23,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="*" element={<NotFound />} />
-
+          <Route path="/register" element={<Register />} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/product_list" element={<ProtectedRoute><ProductList /></ProtectedRoute>} />
           <Route path="/product_list/:sku" element={<ProtectedRoute><ProductDetails /></ProtectedRoute>} />
