@@ -31,6 +31,7 @@ export default function Dashboard() {
       </div>
 
       <Card title="Inventory Attention">
+        <p style={{ color: 'red' }}>MOCK DATA (This is for demonstration purposes only)</p>
         <DataTable
           columns={[
             { header: "Product", render: (r) => r.product },

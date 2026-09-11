@@ -48,6 +48,7 @@ export default function InventoryOverview() {
         <FilterSelect label="Stock Status" options={[{ value: "ok", label: "OK" }, { value: "low", label: "Low" }, { value: "out", label: "Out" }]} />
       </div>
 
+      <p style={{ color: 'red' }}>MOCK DATA (This is for demonstration purposes only)</p>
       <DataTable
         columns={[
           { header: "Product", render: (r) => r.product },
