@@ -21,7 +21,7 @@ export default function Login() {
       await login(username, password);
       navigate("/dashboard");
     } catch (err) {
-      setError("Login failed");
+      setError("Invalid username or password");
     }
   }
   return (
@@ -59,6 +59,7 @@ export default function Login() {
       </form>
 
       <Link to="/forgot-password" className="auth-link">Forgot Password?</Link>
+      <Link to="/register" className="auth-link">Don't have an account? Sign Up</Link>
     </div>
     </div>
   );
