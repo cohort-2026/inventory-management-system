@@ -37,6 +37,7 @@ export default function InventoryCount() {
 
       <SearchInput placeholder="Search products..." />
 
+      <p style={{ color: 'red' }}>MOCK DATA (This is for demonstration purposes only)</p>
       <div className="table-wrap" style={{ marginTop: "var(--space-4)" }}>
         <table className="data-table">
           <thead>
