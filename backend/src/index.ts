@@ -1,12 +1,13 @@
-﻿import express from 'express';
+﻿import './config';
+import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
 import loginRoute from './routes/login';
 import helloRoute from './routes/hello';
 import registerRoute from './routes/register';
-
-dotenv.config();
+import { requireAuth } from './middleware/requireAuth';
+import { requireRole } from './middleware/requireRole';
 
 const app = express();
 
@@ -21,6 +22,10 @@ app.use('/api', registerRoute);
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
+
+app.get('/api/admin', requireAuth, requireRole('admin'), (req, res) => {
+  res.json({ message: 'Admin-only data.' });
+})
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
