@@ -1,3 +1,4 @@
+import { JWT_SECRET } from '../config';
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
@@ -23,7 +24,7 @@ router.post('/login', async (req, res) => {
 
   const token = jwt.sign(
     { username: user.username, role: user.role },
-    process.env.JWT_SECRET || 'dev-secret',
+    JWT_SECRET,
     { expiresIn: '1d' }
   );
 

@@ -1,3 +1,4 @@
+import { JWT_SECRET } from '../config';
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
@@ -9,7 +10,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
     }
 
     try {
-        const payload = jwt.verify(token, process.env.JWT_SECRET || 'dev-secret');
+        const payload = jwt.verify(token, JWT_SECRET);
         (req as any).user = payload;
         next();
     } catch {
