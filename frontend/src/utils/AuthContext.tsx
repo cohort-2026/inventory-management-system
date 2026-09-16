@@ -1,85 +1,157 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { data, useNavigate } from "react-router-dom";
 
-type User = { username: string } | null;
+import {
+  createContext,
+  useContext,
+  useState,
+  ReactNode,
+} from "react";
 
-type AuthContextType = {
-    user: User;
-    loading: boolean;
-    login: (username: string, password: string) => Promise<void>;
-    register: (username: string, password: string) => Promise<void>;
-    logout: () => Promise<void>;
+type User = {
+  username: string;
+  email: string;
+  phone: string;
+  role: "admin" | "staff";
 };
 
-const AuthContext = createContext<AuthContextType>({
-    user: null,
-    loading: true,
-    login: async () => {},
-    register: async () => {},
-    logout: async () => {}
-});
+type AuthContextType = {
+  user: User | null;
+  loading: boolean;
+  login: (email: string, password: string) => Promise<boolean>;
+  logout: () => void;
+  forgotPassword: (
+    email: string,
+    phone: string
+  ) => Promise<boolean>;
+};
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-    const [user, setUser] = useState<User>(null);
-    const [loading, setLoading] = useState(true);
+const AuthContext = createContext<AuthContextType | undefined>(
+  undefined
+);
 
-    useEffect(() => {
-        fetch("http://localhost:5000/api/me", { credentials: "include" })
-            .then((res) => (res.ok ? res.json() :null))
-            .then((data) => setUser(data ? data.user :null))
-            .finally(() => setLoading(false));
-    }, []);
+type AuthProviderProps = {
+  children: ReactNode;
+};
 
-    async function login(username: string, password: string) {
-        const res = await fetch("http://localhost:5000/api/login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({ username, password }),
+export const AuthProvider = ({
+  children,
+}: AuthProviderProps) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const login = async (
+    email: string,
+    password: string
+  ): Promise<boolean> => {
+    setLoading(true);
+
+    try {
+      if (
+        email === "admin@example.com" &&
+        password === "Admin123"
+      ) {
+        setUser({
+          username: "Admin",
+          email: "admin@example.com",
+          phone: "0712345678",
+          role: "admin",
         });
-    
-        if (!res.ok) {
-          const data = await res.json();
-          console.log("Login failed");
-          throw new Error(data.error || "Login failed");
-        }
-    
-        setUser({ username });
-    }
 
-    async function register(username: string, password: string) {
-        const res = await fetch("http://localhost:5000/api/register", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({ username, password }),
+        return true;
+      }
+
+      if (
+        email === "staff@example.com" &&
+        password === "Staff123"
+      ) {
+        setUser({
+          username: "Staff",
+          email: "staff@example.com",
+          phone: "0723456789",
+          role: "staff",
         });
 
-        if (!res.ok) {
-            const data = await res.json();
-            console.log("Registration failed");
-            throw new Error(data.error || "Registration failed");
-        }
+        return true;
+      }
 
-        setUser({ username });
+      return false;
+    } finally {
+      setLoading(false);
     }
+  };
 
-    async function logout() {
-        await fetch("http://localhost:5000/api/logout", {
-            method: "POST",
-            credentials: "include",
-        });
-        setUser(null);
+  const logout = () => {
+    setUser(null);
+  };
+
+  const forgotPassword = async (
+    email: string,
+    phone: string
+  ): Promise<boolean> => {
+    setLoading(true);
+
+    try {
+      const users = [
+        {
+          email: "admin@example.com",
+          phone: "0712345678",
+        },
+        {
+          email: "staff@example.com",
+          phone: "0723456789",
+        },
+      ];
+
+      const foundUser = users.find((account) => {
+        const emailMatch =
+          email.trim() !== "" &&
+          account.email.toLowerCase() ===
+            email.trim().toLowerCase();
+
+        const phoneMatch =
+          phone.trim() !== "" &&
+          account.phone === phone.trim();
+
+        return emailMatch || phoneMatch;
+      });
+
+      if (!foundUser) {
+        return false;
+      }
+
+      console.log(
+        "Password reset requested for:",
+        foundUser.email
+      );
+
+      return true;
+    } finally {
+      setLoading(false);
     }
+  };
 
-    return (
-        <AuthContext.Provider value={{ user, loading, login, register, logout }}>
-            {children}
-        </AuthContext.Provider>
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        login,
+        logout,
+        forgotPassword,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = (): AuthContextType => {
+  const context = useContext(AuthContext);
+
+  if (context === undefined) {
+    throw new Error(
+      "useAuth must be used inside AuthProvider"
     );
-}
+  }
 
-
-export function useAuth() {
-    return useContext(AuthContext);
-}
+  return context;
+};
