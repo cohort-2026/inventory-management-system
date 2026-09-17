@@ -8,6 +8,10 @@ import helloRoute from './routes/hello';
 import registerRoute from './routes/register';
 import { requireAuth } from './middleware/requireAuth';
 import { requireRole } from './middleware/requireRole';
+import authRoute from './routes/authRoutes';
+import authRoutes from './routes/authRoutes';
+
+
 
 const app = express();
 
@@ -18,6 +22,8 @@ app.use(cookieParser());
 app.use('/api', helloRoute);
 app.use('/api', loginRoute);
 app.use('/api', registerRoute);
+app.use('/api/auth', authRoutes);
+
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
