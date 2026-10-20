@@ -2,7 +2,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './utils/AuthContext';
 import ProtectedRoute from './components/ProtectedRoutes';
 import Home from './pages/Home';
-import Login from './pages/Login';
+import  Login from './pages/Login';
 import NotFound from './pages/NotFound';
 import ProductList from './pages/ProductList';
 import ProductDetails from './pages/ProductDetails';
