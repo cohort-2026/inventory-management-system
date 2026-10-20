@@ -4,3 +4,7 @@ build/
 .env
 *.log
 .DS_Store
+
+
+# Ignoring the data folder and the users.json seed data
+backend/src/data/
