@@ -14,6 +14,7 @@ import InventoryCount from './pages/InventoryCount';
 import StockMovementHistory from './pages/StockMovementHistory';
 import Dashboard from './pages/Dashboard';
 import Register from './pages/Register';
+import SupabaseLoginPage from './pages/SupabaseLoginPage';
 
 function App() {
   return (
@@ -21,7 +22,8 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
+          {/* <Route path="/login" element={<Login />} /> */}
+          <Route path="/login" element={<SupabaseLoginPage />} />
           <Route path="*" element={<NotFound />} />
           <Route path="/register" element={<Register />} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
