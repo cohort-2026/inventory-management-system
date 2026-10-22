@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getHello } from '../services/api';
-import Navbar from '../components/NavBar';
+import Navbar from '../components/Navbar';
 
 export default function Home() {
   const [message, setMessage] = useState('Connecting to backend...');

@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import bcrypt from 'bcrypt';
 
-export type Role = 'user' | 'admin';
+export type Role = 'manager' | 'inventory_staff' | 'viewer';
 
 export type User = {
   username: string;
@@ -19,7 +19,7 @@ function ensureFileExists(): void {
   if (fs.existsSync(DATA_FILE)) return;
 
   const seedUsers: User[] = [
-    { username: 'admin', passwordHash: bcrypt.hashSync('admin123', 12), role: 'admin' },
+    { username: 'admin', passwordHash: bcrypt.hashSync('admin123', 12), role: 'manager' },
   ];
 
   fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
@@ -37,7 +37,8 @@ function writeUsers(users: User[]): void {
 }
 
 export function findUser(username: string): User | undefined {
-  return readUsers().find((u) => u.username === username);
+  const normalizedUsername = username.trim().toLowerCase();
+  return readUsers().find((u) => u.username.trim().toLowerCase() === normalizedUsername);
 }
 
 export function addUser(user: User): void {

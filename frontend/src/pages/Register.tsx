@@ -5,6 +5,7 @@ import Field from "../components/Field";
 import Button from "../components/Button";
 
 export default function Register() {
+  const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -15,7 +16,7 @@ export default function Register() {
     e.preventDefault();
     setError("");
     try {
-      await register(username, password);
+      await register(email, username, password);
       navigate("/login");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");
@@ -33,7 +34,16 @@ export default function Register() {
 
         <form onSubmit={handleSubmit}>
           <Field
+            label="Email"
+            type="email"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+          <Field
             label="Username"
+            autoComplete="username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             required
@@ -41,6 +51,7 @@ export default function Register() {
           <Field
             label="Password"
             type="password"
+            autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             minLength={8}

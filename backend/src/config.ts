@@ -1,12 +1,12 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-const JWT_SECRET = process.env.JWT_SECRET;
+const jwtSecret = process.env.JWT_SECRET;
 
-if (!JWT_SECRET) {
+if (!jwtSecret) {
     throw new Error(
         'JWT_SECRET is not set. Add it to your .env file. (see .env.example) before starting the server.'
     );
 }
 
-export { JWT_SECRET };
+export const JWT_SECRET: string = jwtSecret;

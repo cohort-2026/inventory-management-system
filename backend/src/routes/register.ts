@@ -1,29 +1,31 @@
 import express from 'express';
 import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
 import { findUser, addUser } from '../models/userStore';
-import { requireAuth } from '../middleware/requireAuth';
 
 const router = express.Router();
 const SALT_ROUNDS = 12;
 
 router.post('/register', async (req, res) => {
-  const { username, password } = req.body;
+  const { username, password } = req.body ?? {};
 
-  if (typeof username !== 'string' || username.trim() === '') {
-    return res.status(400).json({ error: 'username is required' });
+  if (typeof username !== 'string' || !username.trim()) {
+    res.status(400).json({ error: 'username is required' });
+    return;
   }
   if (typeof password !== 'string' || password.length < 8) {
-    return res.status(400).json({ error: 'password must be at least 8 characters' });
+    res.status(400).json({ error: 'password must be at least 8 characters' });
+    return;
   }
-  if (findUser(username)) {
-    return res.status(409).json({ error: 'That username is already taken' });
+  const normalizedUsername = username.trim();
+  if (findUser(normalizedUsername)) {
+    res.status(409).json({ error: 'That username is already taken' });
+    return;
   }
 
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
-  addUser({ username, passwordHash, role: 'user' });
+  addUser({ username: normalizedUsername, passwordHash, role: 'viewer' });
 
-  res.status(201).json({ message: 'Account created' });
+  res.status(201).json({ message: 'Account created', user: { username: normalizedUsername } });
 });
 
 export default router;

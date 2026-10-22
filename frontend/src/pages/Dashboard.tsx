@@ -15,12 +15,16 @@ const attentionItems = [
 export default function Dashboard() {
   const { user } = useAuth();
 
+  function handleRefresh() {
+    window.location.reload();
+  }
+
   return (
     <AppLayout>
       <PageHeader
         title="Dashboard"
         subtitle={`Good morning, ${user?.username ?? ""}`}
-        actions={<Button variant="secondary">Refresh</Button>}
+        actions={<Button variant="secondary" onClick={handleRefresh}>Refresh</Button>}
       />
 
       <div className="stat-grid">

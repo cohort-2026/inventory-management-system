@@ -37,7 +37,7 @@ router.post('/login', async (req, res) => {
 });
 
 router.get('/me', requireAuth, (req, res) => {
-    res.json({ user: (req as any).user });
+    res.json({ user: req.user });
 });
 
 router.post('/logout', (req, res) => {

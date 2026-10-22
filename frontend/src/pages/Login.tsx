@@ -6,29 +6,27 @@ import Button from "../components/Button";
 
 export default function Login() {
   const { login } = useAuth();
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
   async function handleSubmit(e: React.FormEvent) {
-    console.log("Submitting login form");
-
     e.preventDefault();
     setError("");
 
     try {
-      await login(username, password);
+      await login(email, password);
       navigate("/dashboard");
     } catch (err) {
-      setError("Invalid username or password");
+      setError(err instanceof Error ? err.message : "Sign in failed");
     }
   }
   return (
     <div className="auth-page">
       <div className="auth-card">
         <div className="auth-brand">
-          <span className="auth=brand-mark" />
+          <span className="auth-brand-mark" />
             <h1>Inventory Management System</h1>
         </div>
 
@@ -37,11 +35,11 @@ export default function Login() {
       <form onSubmit={handleSubmit}>
         
         <Field
-          label="Username"
-          type="text"
-          placeholder="admin"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
+          label="Email"
+          type="email"
+          autoComplete="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
           required
         />
 

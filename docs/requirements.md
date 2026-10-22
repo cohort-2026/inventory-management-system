@@ -31,6 +31,34 @@ _Staff_
 •	What should happen when something goes wrong?
     o System should display an error and the error type
 
+## Authorization and role-based access (FR-02, BR-07)
+
+The backend enforces permissions after authentication. A missing or invalid
+session receives HTTP 401; an authenticated account without the required role
+receives HTTP 403. Frontend route checks do not replace these server checks.
+
+| Role | Inventory permissions | Management permissions |
+| --- | --- | --- |
+| Manager (`manager`) | View and modify inventory | Full access, including administrative endpoints |
+| Inventory Staff (`inventory_staff`) | View and modify inventory | No administrative or user-management access |
+| Viewer (`viewer`) | View inventory only | No administrative or user-management access |
+
+Endpoints must use the `requireAuth` middleware followed by `requireRoles` with
+the minimum roles allowed for that action. Newly registered accounts receive
+the Viewer role; elevated roles must be assigned through a trusted administrative
+process. Legacy `admin`, `staff`, and `user` session role claims are normalized
+to Manager, Inventory Staff, and Viewer respectively.
+
+## Account registration and password recovery
+
+Accounts sign in with their registered email and password. Registration stores
+the username as display metadata and assigns the Viewer role through the trusted
+database trigger. Password recovery sends a reset link to the account email;
+the backend verifies the recovery token before updating the password. Recovery
+responses do not disclose whether an email address is registered. Supabase
+Auth must have email delivery enabled and allow `FRONTEND_URL/reset-password`
+as a redirect URL.
+
 ## Non-functional Requirements
 
 Things to consider:

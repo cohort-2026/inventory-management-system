@@ -1,15 +1,40 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { data, useNavigate } from "react-router-dom";
+import { createContext, useContext, useEffect, useState } from "react";
+import type { ReactNode } from "react";
 
-type User = { username: string } | null;
+type User = { username: string; email: string } | null;
+type AuthSession = { accessToken: string };
+type ApiUser = { username?: string; email?: string };
 
 type AuthContextType = {
     user: User;
     loading: boolean;
-    login: (username: string, password: string) => Promise<void>;
-    register: (username: string, password: string) => Promise<void>;
+    login: (email: string, password: string) => Promise<void>;
+    register: (email: string, username: string, password: string) => Promise<void>;
     logout: () => Promise<void>;
 };
+
+const API_URL = `${import.meta.env.VITE_API_URL}/api/auth`;
+const SESSION_KEY = "inventory-auth-session";
+
+function readSession(): AuthSession | null {
+    try {
+        const savedSession = sessionStorage.getItem(SESSION_KEY);
+        if (!savedSession) return null;
+        const parsed: unknown = JSON.parse(savedSession);
+        if (
+            typeof parsed === "object" &&
+            parsed !== null &&
+            "accessToken" in parsed &&
+            typeof parsed.accessToken === "string"
+        ) {
+            return { accessToken: parsed.accessToken };
+        }
+        sessionStorage.removeItem(SESSION_KEY);
+        return null;
+    } catch {
+        return null;
+    }
+}
 
 const AuthContext = createContext<AuthContextType>({
     user: null,
@@ -21,54 +46,95 @@ const AuthContext = createContext<AuthContextType>({
 
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User>(null);
-    const [loading, setLoading] = useState(true);
+    const [session, setSession] = useState<AuthSession | null>(readSession);
+    const [loading, setLoading] = useState(() => Boolean(readSession()));
 
     useEffect(() => {
-        fetch("http://localhost:5000/api/me", { credentials: "include" })
-            .then((res) => (res.ok ? res.json() :null))
-            .then((data) => setUser(data ? data.user :null))
-            .finally(() => setLoading(false));
-    }, []);
+        if (!session) {
+            setUser(null);
+            setLoading(false);
+            return;
+        }
 
-    async function login(username: string, password: string) {
-        const res = await fetch("http://localhost:5000/api/login", {
+        let active = true;
+        fetch(`${API_URL}/me`, {
+            headers: { Authorization: `Bearer ${session.accessToken}` },
+        })
+            .then(async (response) => {
+                if (!response.ok) {
+                    sessionStorage.removeItem(SESSION_KEY);
+                    setSession(null);
+                    setUser(null);
+                    return;
+                }
+                const result: { user: ApiUser } = await response.json();
+                if (active) {
+                    const email = result.user.email ?? "";
+                    setUser({
+                        username: result.user.username || email,
+                        email,
+                    });
+                }
+            })
+            .catch((error: unknown) => {
+                console.error("Unable to restore authentication session:", error);
+                if (active) setUser(null);
+            })
+            .finally(() => {
+                if (active) setLoading(false);
+            });
+
+        return () => {
+            active = false;
+        };
+    }, [session]);
+
+    async function login(email: string, password: string) {
+        const res = await fetch(`${API_URL}/login`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({ username, password }),
+            body: JSON.stringify({ email, password }),
         });
-    
+
+        const result = await res.json();
         if (!res.ok) {
-          const data = await res.json();
-          console.log("Login failed");
-          throw new Error(data.error || "Login failed");
+            throw new Error(result.message || "Login failed");
         }
-    
-        setUser({ username });
+
+        const authSession = result.session as { access_token?: unknown } | undefined;
+        if (typeof authSession?.access_token !== "string" || !result.user) {
+            throw new Error("The server returned an invalid login session.");
+        }
+
+        const nextSession = { accessToken: authSession.access_token };
+        try {
+            sessionStorage.setItem(SESSION_KEY, JSON.stringify(nextSession));
+        } catch {
+            throw new Error("Could not save the sign-in session in this browser.");
+        }
+        setSession(nextSession);
+        setUser({
+            username: result.user.username || email,
+            email: result.user.email || email,
+        });
     }
 
-    async function register(username: string, password: string) {
-        const res = await fetch("http://localhost:5000/api/register", {
+    async function register(email: string, username: string, password: string) {
+        const res = await fetch(`${API_URL}/register`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({ username, password }),
+            body: JSON.stringify({ email, username, password }),
         });
 
+        const result = await res.json();
         if (!res.ok) {
-            const data = await res.json();
-            console.log("Registration failed");
-            throw new Error(data.error || "Registration failed");
+            throw new Error(result.message || "Registration failed");
         }
-
-        setUser({ username });
     }
 
     async function logout() {
-        await fetch("http://localhost:5000/api/logout", {
-            method: "POST",
-            credentials: "include",
-        });
+        sessionStorage.removeItem(SESSION_KEY);
+        setSession(null);
         setUser(null);
     }
 
