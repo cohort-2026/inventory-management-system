@@ -14,6 +14,8 @@ import type {
   CookieAuthenticatedRequest,
 } from './supabaseCookieAuth';
 
+import supabaseRbacTestRoutes from './supabaseRbacTestRoutes';
+
 const router = Router();
 
 // Origin validation for state-changing requests.
@@ -176,5 +178,9 @@ router.post('/logout', (_req, res) => {
     message: 'Local session cleared',
   });
 });
+
+if (process.env.NODE_ENV !== 'production') {
+  router.use('/rbac-test', supabaseRbacTestRoutes);
+}
 
 export default router;

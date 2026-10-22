@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
-import { supabaseAdmin, supabaseAuth } from './supabaseAuthClient';
+import { supabaseAdmin, supabaseAuth } from '../auth/supabaseAuthClient';
 
 export type AuthenticatedIdentity = {
   id: string;

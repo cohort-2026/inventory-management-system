@@ -1,15 +1,28 @@
-import { Request, Response, NextFunction } from 'express';
 
-export function requireRole(role: string) {
-    return (req: Request, res: Response, next: NextFunction) => {
-        const user = (req as any).user;
+import type { Request, Response, NextFunction } from "express";
 
-        if (!user) {
-            return res.status(401).json({ error: 'Not signed in' });
-        }
-        if (user.role !== role) {
-            return res.status(403).json({ error: 'Not allowed' });
-        }
-        next();
+export type UserRole = "admin" | "staff" | "customer";
+
+export function requireRole(...allowedRoles: UserRole[]) {
+  return (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): void => {
+    if (!req.user) {
+      res.status(401).json({
+        message: "Authentication required. Please log in.",
+      });
+      return;
     }
+
+    if (!allowedRoles.includes(req.user.role as UserRole)) {
+      res.status(403).json({
+        message: "Forbidden. You do not have permission to perform this action.",
+      });
+      return;
+    }
+
+    next();
+  };
 }
