@@ -9,7 +9,7 @@ export default function Home() {
   useEffect(() => {
     getHello()
       .then((data) => setMessage(`${data.message} (at ${data.timestamp})`))
-      .catch(() => setError('Could not reach the backend. Is it running on port 5000?'));
+      .catch(() => setError('Could not reach the backend. Check if it is running on port 5000?'));
   }, []);
 
   return (
