@@ -1,7 +1,7 @@
 
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { getHello } from "../services/api";
+import "../Home.css";
 
 type BackendStatus = "checking" | "online" | "offline";
 
@@ -55,41 +55,54 @@ export default function Home() {
     useState<BackendStatus>("checking");
   const [backendMessage, setBackendMessage] = useState("");
 
- useEffect(() => {
-  let active = true;
+   useEffect(() => {
+    let active = true;
+    let pending: AbortController | null = null;
 
-  const checkBackend = async () => {
-    try {
-      const data = await getHello();
+    const checkBackend = async () => {
+      pending?.abort();
+      const controller = new AbortController();
+      pending = controller;
+      const timeout = setTimeout(() => controller.abort(), 5000);
 
-      if (!active) return;
+      try {
+        const apiUrl = (import.meta.env.VITE_API_URL ?? "http://localhost:5000").replace(/\/$/, "");
+        const response = await fetch(`${apiUrl}/health`, {
+          method: "GET",
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(`Health check returned ${response.status}`);
+        const data: unknown = await response.json();
+        if (!data || typeof data !== "object" || !("status" in data) || data.status !== "ok") {
+          throw new Error("Unexpected health response");
+        }
+        if (!active) return;
+        setBackendStatus("online");
+        setBackendMessage("The inventory API is responding normally.");
+      } catch {
+        if (!active) return;
+        setBackendStatus("offline");
+        setBackendMessage("Cannot reach the inventory API. Check that the backend server is running.");
+      } finally {
+        clearTimeout(timeout);
+      }
+    };
 
-      setBackendStatus("online");
-      setBackendMessage(
-        data.message || "Backend health check successful."
-      );
-    } catch {
-      if (!active) return;
+    void checkBackend();
+    const interval = setInterval(() => void checkBackend(), 15000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+      pending?.abort();
+    };
+  }, []);
 
-      setBackendStatus("offline");
-      setBackendMessage(
-        "Backend is offline. Check that your server is running on port 5000."
-      );
-    }
+  const statusText: Record<BackendStatus, string> = {
+    checking: "Checking Backend...",
+    online: "Backend Online",
+    offline: "Backend Offline",
   };
-
-  checkBackend();
-
-  return () => {
-    active = false;
-  };
-}, []);
-
-  const statusText = {
-    checking: "Checking server connection",
-    online: "Backend connected",
-    offline: "Backend unavailable",
-  }[backendStatus];
 
   return (
     <main className="landing-page">
@@ -127,8 +140,11 @@ export default function Home() {
             role="status"
             aria-live="polite"
           >
-            <span className="landing-status-dot" />
-            {statusText}
+
+            <span className="landing-status-dot" aria-hidden="true" />
+
+            {statusText[backendStatus]}
+
           </div>
 
           <p className="landing-eyebrow">
@@ -331,10 +347,14 @@ export default function Home() {
 
       <section className="landing-backend" aria-live="polite">
         <span
-          className={`landing-backend-indicator landing-backend-${backendStatus}`}
+
+          className={`landing-backend-indicator landing-backend-${backendStatus}`} aria-hidden="true"
+
         />
         <div>
-          <strong>{statusText}</strong>
+
+          <strong>{statusText[backendStatus]}</strong>
+
           <p>
             {backendMessage ||
               "Waiting for a response from your inventory server."}
