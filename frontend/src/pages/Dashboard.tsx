@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import AppLayout from "../components/AppLayout";
 import PageHeader from "../components/PageHeader";
 import StatCard from "../components/StatCard";
@@ -31,19 +30,7 @@ export default function Dashboard() {
         <StatCard label="Out of Stock" value="8" />
       </div>
 
-      <Card title="Authentication & Role Demonstration">
-        <p style={{ marginBottom: 'var(--space-3)', color: 'var(--color-text-muted)' }}>
-          Verify the current Supabase session and demonstrate live backend role permissions.
-        </p>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
-          <Link className="btn btn-primary" to="/auth-showcase">Authentication overview</Link>
-          <Link className="btn btn-secondary" to="/rbac-showcase">Test role access</Link>
-        </div>
-      </Card>
-
-      <div style={{ height: 'var(--space-4)' }} />
       <Card title="Inventory Attention">
-        <p style={{ color: 'red' }}>MOCK DATA (This is for demonstration purposes only)</p>
         <DataTable
           columns={[
             { header: "Product", render: (r) => r.product },

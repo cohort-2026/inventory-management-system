@@ -58,7 +58,6 @@ export default function ProductList() {
         <button className="btn btn-secondary">Clear Filters</button>
       </div>
 
-      <p style={{ color: 'red' }}>MOCK DATA (This is for demonstration purposes only)</p>
       <DataTable
         columns={[
           { header: "Product", render: (p) => <Link to={`/products/${p.sku}`}>{p.name}</Link> },
