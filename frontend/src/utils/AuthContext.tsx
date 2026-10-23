@@ -1,66 +1,160 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { data, useNavigate } from "react-router-dom";
 
-type User = { username: string } | null;
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+} from 'react';
+
+import type { ReactNode } from 'react';
+
+const API_URL =
+  import.meta.env.VITE_API_URL ??
+  'http://localhost:5000';
+
+const AUTH_URL = `${API_URL}/api/supabase-auth`;
+
+type User = {
+  id: string;
+  email: string;
+  username: string;
+  roleId: string;
+  status: string;
+};
 
 type AuthContextType = {
-    user: User;
-    loading: boolean;
-    login: (username: string, password: string) => Promise<void>;
-    logout: () => Promise<void>;
+  user: User | null;
+  loading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+};
+
+type ServerUser = {
+  id: string;
+  email: string;
+  roleId: string;
+  status: string;
 };
 
 const AuthContext = createContext<AuthContextType>({
-    user: null,
-    loading: true,
-    login: async () => {},
-    logout: async () => {}
+  user: null,
+  loading: true,
+  login: async () => {},
+  register: async () => {},
+  logout: async () => {},
 });
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-    const [user, setUser] = useState<User>(null);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        fetch("http://localhost:5000/api/me", { credentials: "include" })
-            .then((res) => (res.ok ? res.json() :null))
-            .then((data) => setUser(data ? data.user :null))
-            .finally(() => setLoading(false));
-    }, []);
-
-    async function login(username: string, password: string) {
-        const res = await fetch("http://localhost:5000/api/login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({ username, password }),
-        });
-    
-        if (!res.ok) {
-          const data = await res.json();
-          console.log("Login failed");
-          throw new Error(data.error || "Login failed");
-        }
-    
-        setUser({ username });
-    }
-
-    async function logout() {
-        await fetch("http://localhost:5000/api/logout", {
-            method: "POST",
-            credentials: "include",
-        });
-        setUser(null);
-    }
-
-    return (
-        <AuthContext.Provider value={{ user, loading, login, logout }}>
-            {children}
-        </AuthContext.Provider>
-    );
+function normalizeUser(user: ServerUser): User {
+  return {
+    ...user,
+    username: user.email,
+  };
 }
 
+async function authRequest(
+  path: string,
+  options: RequestInit = {},
+) {
+  const response = await fetch(`${AUTH_URL}${path}`, {
+    ...options,
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+  const body = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(body.error ?? 'Authentication failed');
+  }
+
+  return body;
+}
+
+export function AuthProvider({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+
+    authRequest('/me')
+      .then((data) => {
+        if (mounted) {
+          setUser(normalizeUser(data.user));
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setUser(null);
+        }
+      })
+      .finally(() => {
+        if (mounted) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  async function login(email: string, password: string) {
+    const data = await authRequest('/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+
+    setUser(normalizeUser(data.user));
+  }
+
+  async function register(
+    email: string,
+    password: string,
+  ) {
+    await authRequest('/register', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+
+    // Registration does not automatically mean
+    // the user is authenticated.
+    // Email confirmation may be required.
+  }
+
+  async function logout() {
+    try {
+      await authRequest('/logout', {
+        method: 'POST',
+      });
+    } finally {
+      setUser(null);
+    }
+  }
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        login,
+        register,
+        logout,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
 
 export function useAuth() {
-    return useContext(AuthContext);
+  return useContext(AuthContext);
 }

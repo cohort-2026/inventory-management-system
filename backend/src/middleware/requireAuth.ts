@@ -1,18 +1,17 @@
-import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
 
-export function requireAuth(req: Request, res: Response, next: NextFunction) {
-    const token = req.cookies.token;
+import type { Request, Response, NextFunction } from "express";
 
-    if (!token) {
-        return res.status(401).json({ error: 'Not signed in' });
-    }
+export function requireAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void {
+  if (!req.user) {
+    res.status(401).json({
+      message: "Authentication required. Please log in.",
+    });
+    return;
+  }
 
-    try {
-        const payload = jwt.verify(token, process.env.JWT_SECRET || 'dev-secret');
-        (req as any).user = payload;
-        next();
-    } catch {
-            return res.status(401).json({ error: 'Invalid or expired session' });
-    }
+  next();
 }
