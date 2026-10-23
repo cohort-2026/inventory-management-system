@@ -15,6 +15,8 @@ import StockMovementHistory from './pages/StockMovementHistory';
 import Dashboard from './pages/Dashboard';
 import Register from './pages/Register';
 import SupabaseLoginPage from './pages/SupabaseLoginPage';
+import AuthShowcase from './pages/AuthShowcase';
+import RbacShowcase from './pages/RbacShowcase';
 
 function App() {
   return (
@@ -26,6 +28,8 @@ function App() {
           <Route path="/login" element={<SupabaseLoginPage />} />
           <Route path="*" element={<NotFound />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/auth-showcase" element={<ProtectedRoute><AuthShowcase /></ProtectedRoute>} />
+          <Route path="/rbac-showcase" element={<ProtectedRoute><RbacShowcase /></ProtectedRoute>} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/product_list" element={<ProtectedRoute><ProductList /></ProtectedRoute>} />
           <Route path="/product_list/:sku" element={<ProtectedRoute><ProductDetails /></ProtectedRoute>} />
