@@ -89,7 +89,7 @@ export function LoginScreen({ onSubmit }: LoginScreenProps) {
           </button>
 
           <div style={{ textAlign: "center", marginTop: "10px" }}>
-            <span style={{ fontSize: "11px", fontWeight: 700, color: "#3566a3" }}>Forgot password?</span>
+            <a href="/forgot-password.html" style={{ fontSize: "11px", fontWeight: 700, color: "#3566a3", textDecoration: "none" }}>Forgot password?</a>
           </div>
 
           <div style={{ marginTop: "16px", borderTop: "1px solid #e6e6e6", paddingTop: "10px" }}>
