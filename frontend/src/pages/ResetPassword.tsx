@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { SyntheticEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
-import { resetPassword } from "../api.ts/passwordReset";
+import { resetPassword } from "../api/passwordReset";
 
 // Supabase puts the reset token after the "#" in the link from the email.
 function readResetToken(): string | null {
