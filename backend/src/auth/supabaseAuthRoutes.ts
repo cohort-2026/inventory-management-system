@@ -1,7 +1,7 @@
 
 import { Router } from 'express';
 
-import { supabaseAuth } from './supabaseAuthClient';
+import { supabaseAdmin, supabaseAuth } from './supabaseAuthClient';
 
 import {
   clearSessionCookies,
@@ -177,6 +177,117 @@ router.post('/logout', (_req, res) => {
   res.status(200).json({
     message: 'Local session cleared',
   });
+});
+
+// Ask Supabase to email a password reset link.
+router.post('/forgot-password', async (req, res) => {
+  const { email } = req.body ?? {};
+
+  if (
+    typeof email !== 'string' ||
+    !/^\S+@\S+\.\S+$/.test(email.trim())
+  ) {
+    res.status(400).json({
+      error: 'A valid email is required',
+    });
+    return;
+  }
+
+  const frontendUrl =
+    process.env.FRONTEND_URL ??
+    'http://localhost:5173';
+
+  try {
+    const { error } =
+      await supabaseAuth.auth.resetPasswordForEmail(
+        email.trim(),
+        {
+          redirectTo: `${frontendUrl}/reset-password`,
+        },
+      );
+
+    if (error?.status === 429) {
+      res.status(429).json({
+        error: 'Too many requests. Please try again later.',
+      });
+      return;
+    }
+
+    if (error) {
+      // Log it for the team, but tell the caller nothing about the account.
+      console.error('Password reset email failed:', error.message);
+    }
+
+    // The same answer whether or not the email has an account.
+    res.status(200).json({
+      message:
+        'If an account exists for that email, a reset link has been sent.',
+    });
+  } catch (error) {
+    console.error('Forgot password failed:', error);
+
+    res.status(503).json({
+      error: 'Authentication service unavailable',
+    });
+  }
+});
+
+// Save a new password using the token from the reset email link.
+router.post('/reset-password', async (req, res) => {
+  const { accessToken, newPassword } = req.body ?? {};
+
+  if (
+    typeof accessToken !== 'string' ||
+    !accessToken ||
+    typeof newPassword !== 'string' ||
+    newPassword.length < 8
+  ) {
+    res.status(400).json({
+      error:
+        'A reset token and a password of at least 8 characters are required',
+    });
+    return;
+  }
+
+  try {
+    // 1. Check the token belongs to a real user.
+    const { data, error: tokenError } =
+      await supabaseAuth.auth.getUser(accessToken);
+
+    if (tokenError || !data.user) {
+      res.status(401).json({
+        error: 'This reset link is invalid or has expired',
+      });
+      return;
+    }
+
+    // 2. Save the new password for that user.
+    const { error } =
+      await supabaseAdmin.auth.admin.updateUserById(
+        data.user.id,
+        { password: newPassword },
+      );
+
+    if (error) {
+      res.status(400).json({
+        error: 'Could not update the password',
+      });
+      return;
+    }
+
+    // No session cookies here: the user logs in again with the new password.
+    clearSessionCookies(res);
+
+    res.status(200).json({
+      message: 'Password updated',
+    });
+  } catch (error) {
+    console.error('Reset password failed:', error);
+
+    res.status(503).json({
+      error: 'Authentication service unavailable',
+    });
+  }
 });
 
 if (process.env.NODE_ENV !== 'production') {

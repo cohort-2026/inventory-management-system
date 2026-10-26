@@ -2,7 +2,6 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './utils/AuthContext';
 import ProtectedRoute from './components/ProtectedRoutes';
 import Home from './pages/Home';
-import  Login from './pages/Login';
 import NotFound from './pages/NotFound';
 import ProductList from './pages/ProductList';
 import ProductDetails from './pages/ProductDetails';
@@ -17,6 +16,8 @@ import Register from './pages/Register';
 import SupabaseLoginPage from './pages/SupabaseLoginPage';
 import AuthShowcase from './pages/AuthShowcase';
 import RbacShowcase from './pages/RbacShowcase';
+import ForgotPassword from './pages/ForgotPassword';
+import { ResetPassword } from './pages/ResetPassword';
 
 function App() {
   return (
@@ -39,6 +40,8 @@ function App() {
           <Route path="/inventory_overview" element={<ProtectedRoute><InventoryOverview /></ProtectedRoute>} />
           <Route path="/inventory_count" element={<ProtectedRoute><InventoryCount /></ProtectedRoute>} />
           <Route path="/stock_movement_history" element={<ProtectedRoute><StockMovementHistory /></ProtectedRoute>} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
