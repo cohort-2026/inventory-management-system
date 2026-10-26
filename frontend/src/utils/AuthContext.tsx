@@ -22,11 +22,16 @@ type User = {
   status: string;
 };
 
+export type RegistrationResult = {
+  message: string;
+  confirmationRequired: boolean;
+};
+
 type AuthContextType = {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, firstName: string, lastName: string) => Promise<RegistrationResult>;
   logout: () => Promise<void>;
 };
 
@@ -119,15 +124,18 @@ export function AuthProvider({
   async function register(
     email: string,
     password: string,
-  ) {
-    await authRequest('/register', {
+    firstName: string,
+    lastName: string,
+  ): Promise<RegistrationResult> {
+    const data = await authRequest('/register', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, firstName, lastName }),
     });
 
-    // Registration does not automatically mean
-    // the user is authenticated.
-    // Email confirmation may be required.
+    return {
+      message: typeof data.message === 'string' ? data.message : 'Registration submitted.',
+      confirmationRequired: data.confirmationRequired !== false,
+    };
   }
 
   async function logout() {

@@ -45,46 +45,62 @@ router.use((req, res, next) => {
 
 // Register through Supabase Authentication.
 router.post('/register', async (req, res) => {
-  const {
-    email,
-    password,
-    firstName,
-    lastName,
-  } = req.body ?? {};
+  const { email, password, firstName, lastName } = req.body ?? {};
 
   if (
     typeof email !== 'string' ||
-    !email.trim() ||
+    !/^\S+@\S+\.\S+$/.test(email.trim()) ||
     typeof password !== 'string' ||
     password.length < 8 ||
-    (firstName !== undefined &&
-      typeof firstName !== 'string') ||
-    (lastName !== undefined &&
-      typeof lastName !== 'string')
+    typeof firstName !== 'string' ||
+    !firstName.trim() ||
+    firstName.trim().length > 100 ||
+    typeof lastName !== 'string' ||
+    !lastName.trim() ||
+    lastName.trim().length > 100
   ) {
     res.status(400).json({
-      error: 'Valid registration details required',
+      error: 'Valid email, password (at least 8 characters), first name and last name are required',
     });
     return;
   }
 
   try {
-    const { data, error } =
-      await supabaseAuth.auth.signUp({
-        email: email.trim(),
-        password,
-        options: {
-          data: {
-            first_name: firstName ?? '',
-            last_name: lastName ?? '',
-          },
+    const { data, error } = await supabaseAuth.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        data: {
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
         },
-      });
+      },
+    });
 
     if (error) {
-      res.status(error.status === 429 ? 429 : 400).json({
-        error: error.message,
+      const duplicate = error.code === 'user_already_exists' ||
+        /already registered|already exists/i.test(error.message);
+      res.status(duplicate ? 409 : error.status === 429 ? 429 : 400).json({
+        error: duplicate
+          ? 'This email is already registered. Please sign in instead.'
+          : error.message,
       });
+      return;
+    }
+
+    // With email confirmation enabled, Supabase may return a fake user
+    // for an existing email to discourage account enumeration.
+    // A fake signup user typically has an empty identities array.
+    if (data.user && Array.isArray(data.user.identities) &&
+        data.user.identities.length === 0) {
+      res.status(409).json({
+        error: 'This email is already registered. Please sign in instead.',
+      });
+      return;
+    }
+
+    if (!data.user) {
+      res.status(503).json({ error: 'Registration could not be verified. Please try again.' });
       return;
     }
 
@@ -94,10 +110,7 @@ router.post('/register', async (req, res) => {
     });
   } catch (error) {
     console.error('Registration failed:', error);
-
-    res.status(503).json({
-      error: 'Authentication service unavailable',
-    });
+    res.status(503).json({ error: 'Authentication service unavailable' });
   }
 });
 
