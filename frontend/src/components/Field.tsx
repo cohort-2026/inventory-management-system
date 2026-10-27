@@ -1,4 +1,4 @@
-import { InputHTMLAttributes } from "react";
+import type { InputHTMLAttributes } from "react";
 import "../App.css";
 
 type FieldProps = InputHTMLAttributes<HTMLInputElement> & {

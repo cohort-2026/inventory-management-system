@@ -8,18 +8,19 @@ import {
 
 import type { ReactNode } from 'react';
 
-const API_URL =
-  import.meta.env.VITE_API_URL ??
-  'http://localhost:5000';
+import {
+  AUTH_API_BASE,
+} from '../services/authConfig';
 
-const AUTH_URL = `${API_URL}/api/supabase-auth`;
-
-type User = {
+export type AuthUser = {
   id: string;
   email: string;
   username: string;
   roleId: string;
   status: string;
+  firstName?: string;
+  lastName?: string;
+  emailVerified?: boolean;
 };
 
 export type RegistrationResult = {
@@ -28,10 +29,18 @@ export type RegistrationResult = {
 };
 
 type AuthContextType = {
-  user: User | null;
+  user: AuthUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, firstName: string, lastName: string) => Promise<RegistrationResult>;
+  login: (
+    email: string,
+    password: string,
+  ) => Promise<void>;
+  register: (
+    email: string,
+    password: string,
+    firstName: string,
+    lastName: string,
+  ) => Promise<RegistrationResult>;
   logout: () => Promise<void>;
 };
 
@@ -40,17 +49,19 @@ type ServerUser = {
   email: string;
   roleId: string;
   status: string;
+  firstName?: string;
+  lastName?: string;
+  emailVerified?: boolean;
 };
 
-const AuthContext = createContext<AuthContextType>({
-  user: null,
-  loading: true,
-  login: async () => {},
-  register: async () => {},
-  logout: async () => {},
-});
+const AuthContext =
+  createContext<AuthContextType | undefined>(
+    undefined,
+  );
 
-function normalizeUser(user: ServerUser): User {
+function normalizeUser(
+  user: ServerUser,
+): AuthUser {
   return {
     ...user,
     username: user.email,
@@ -60,20 +71,33 @@ function normalizeUser(user: ServerUser): User {
 async function authRequest(
   path: string,
   options: RequestInit = {},
-) {
-  const response = await fetch(`${AUTH_URL}${path}`, {
-    ...options,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
+): Promise<any> {
+  const response = await fetch(
+    `${AUTH_API_BASE}${path}`,
+    {
+      ...options,
+      credentials: 'include',
+      cache: 'no-store',
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
     },
-  });
+  );
 
-  const body = await response.json().catch(() => ({}));
+  const body: unknown =
+    await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(body.error ?? 'Authentication failed');
+    const message =
+      body &&
+      typeof body === 'object' &&
+      'error' in body &&
+      typeof body.error === 'string'
+        ? body.error
+        : 'Authentication request failed';
+
+    throw new Error(message);
   }
 
   return body;
@@ -84,39 +108,51 @@ export function AuthProvider({
 }: {
   children: ReactNode;
 }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] =
+    useState<AuthUser | null>(null);
+
+  const [loading, setLoading] =
+    useState(true);
 
   useEffect(() => {
-    let mounted = true;
+    let active = true;
 
     authRequest('/me')
-      .then((data) => {
-        if (mounted) {
+      .then((data: { user: ServerUser }) => {
+        if (active) {
           setUser(normalizeUser(data.user));
         }
       })
       .catch(() => {
-        if (mounted) {
+        if (active) {
           setUser(null);
         }
       })
       .finally(() => {
-        if (mounted) {
+        if (active) {
           setLoading(false);
         }
       });
 
     return () => {
-      mounted = false;
+      active = false;
     };
   }, []);
 
-  async function login(email: string, password: string) {
-    const data = await authRequest('/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
-    });
+  async function login(
+    email: string,
+    password: string,
+  ): Promise<void> {
+    const data = await authRequest(
+      '/login',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          email,
+          password,
+        }),
+      },
+    ) as { user: ServerUser };
 
     setUser(normalizeUser(data.user));
   }
@@ -127,21 +163,34 @@ export function AuthProvider({
     firstName: string,
     lastName: string,
   ): Promise<RegistrationResult> {
-    const data = await authRequest('/register', {
-      method: 'POST',
-      body: JSON.stringify({ email, password, firstName, lastName }),
-    });
+    const data = await authRequest(
+      '/register',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          email,
+          password,
+          firstName,
+          lastName,
+        }),
+      },
+    ) as RegistrationResult;
 
     return {
-      message: typeof data.message === 'string' ? data.message : 'Registration submitted.',
-      confirmationRequired: data.confirmationRequired !== false,
+      message:
+        typeof data.message === 'string'
+          ? data.message
+          : 'Registration submitted.',
+      confirmationRequired:
+        data.confirmationRequired !== false,
     };
   }
 
-  async function logout() {
+  async function logout(): Promise<void> {
     try {
       await authRequest('/logout', {
         method: 'POST',
+        body: '{}',
       });
     } finally {
       setUser(null);
@@ -163,6 +212,14 @@ export function AuthProvider({
   );
 }
 
-export function useAuth() {
-  return useContext(AuthContext);
+export function useAuth(): AuthContextType {
+  const context = useContext(AuthContext);
+
+  if (!context) {
+    throw new Error(
+      'useAuth must be used inside AuthProvider',
+    );
+  }
+
+  return context;
 }

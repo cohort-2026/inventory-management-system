@@ -2,7 +2,6 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './utils/AuthContext';
 import ProtectedRoute from './components/ProtectedRoutes';
 import Home from './pages/Home';
-import  Login from './pages/Login';
 import NotFound from './pages/NotFound';
 import ProductList from './pages/ProductList';
 import ProductDetails from './pages/ProductDetails';
@@ -14,9 +13,9 @@ import InventoryCount from './pages/InventoryCount';
 import StockMovementHistory from './pages/StockMovementHistory';
 import Dashboard from './pages/Dashboard';
 import Register from './pages/Register';
-import SupabaseLoginPage from './pages/SupabaseLoginPage';
 import AuthShowcase from './pages/AuthShowcase';
 import RbacShowcase from './pages/RbacShowcase';
+import CustomLoginPage from './pages/CustomLoginPage';
 
 function App() {
   return (
@@ -25,7 +24,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           {/* <Route path="/login" element={<Login />} /> */}
-          <Route path="/login" element={<SupabaseLoginPage />} />
+          <Route path="/login" element={<CustomLoginPage />} />
           <Route path="*" element={<NotFound />} />
           <Route path="/register" element={<Register />} />
           <Route path="/auth-showcase" element={<ProtectedRoute><AuthShowcase /></ProtectedRoute>} />
