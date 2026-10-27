@@ -22,6 +22,10 @@ router.post('/login', async (req, res) => {
   const matches = await bcrypt.compare(password, user.passwordHash);
   if (!matches) return res.status(401).json(genericError);
 
+  if (!JWT_SECRET) {
+    return res.status(500).json({ error: 'Server configuration error' });
+  }
+
   const token = jwt.sign(
     { username: user.username, role: user.role },
     JWT_SECRET,

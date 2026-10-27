@@ -11,6 +11,8 @@ import { requireRole } from './middleware/requireRole';
 
 import supabaseAuthRoutes from "./auth/supabaseAuthRoutes";
 
+import customAuthRoutes from "./auth/customAuthRoutes";
+
 const app = express();
 
 app.use(cors({ origin: ['http://localhost:5173'], credentials: true }));
@@ -22,6 +24,11 @@ app.use('/api', helloRoute);
 // app.use('/api', registerRoute);
 
 app.use('/api/supabase-auth', supabaseAuthRoutes);
+
+// New authentication is isolated during development
+if (process.env.NODE_ENV === 'development') {
+  app.use('/api/custom-auth', customAuthRoutes);
+}
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
