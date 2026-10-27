@@ -27,6 +27,19 @@ import type {
   SessionAuthenticatedRequest,
 } from '../middleware/requireSession';
 
+import {
+  sendVerificationEmail,
+  resendVerificationEmail,
+  verifyEmailAddress,
+} from './emailVerificationService';
+
+import {
+  registrationLimiter,
+  loginLimiter,
+  resendVerificationLimiter,
+  verifyEmailLimiter,
+} from './customAuthRateLimits';
+
 const router = Router();
 
 const FRONTEND_URL =
@@ -67,42 +80,145 @@ router.use((req, res, next) => {
 });
 
 // POST /api/custom-auth/register
-router.post('/register', async (req, res) => {
-  try {
-    const user = await registerUser(
-      req.body ?? {},
-    );
+
+router.post(
+  '/register',
+  registrationLimiter,
+  async (req, res) => {
+    try {
+      const user = await registerUser(
+        req.body ?? {},
+      );
+
+      let emailSent = false;
+
+      try {
+        await sendVerificationEmail(
+          user.id,
+          user.email,
+        );
+
+        emailSent = true;
+      } catch (mailError) {
+        // The account was already committed to
+        // PostgreSQL. Don't pretend it wasn't.
+        //
+        // Keep the account pending verification
+        // and allow the user to resend later.
+        console.error(
+          'Registration verification email failed:',
+          mailError instanceof Error
+            ? mailError.message
+            : 'Unknown mail error',
+        );
+      }
+
+      res.status(202).json({
+        message: emailSent
+          ? 'Account created. Check your email for a verification link.'
+          : 'Account created, but the verification email could not be sent. Please try resending shortly.',
+        confirmationRequired: true,
+        emailDelivery: emailSent
+          ? 'sent'
+          : 'failed',
+      });
+    } catch (error) {
+      if (error instanceof AuthServiceError) {
+        res.status(error.statusCode).json({
+          error: error.message,
+          code: error.code,
+        });
+        return;
+      }
+
+      console.error(
+        'Custom registration failed:',
+        error,
+      );
+
+      res.status(503).json({
+        error:
+          'Registration service unavailable',
+      });
+    }
+  },
+);
+
+
+// POST /api/resend-verification
+router.post(
+  '/resend-verification',
+  resendVerificationLimiter,
+  async (req, res) => {
+    const email: unknown =
+      req.body?.email;
+
+    try {
+      await resendVerificationEmail(email);
+    } catch (error) {
+      // Avoid exposing SMTP or account state
+      // through this public-facing response.
+      console.error(
+        'Verification resend failed:',
+        error instanceof Error
+          ? error.message
+          : 'Unknown error',
+      );
+    }
 
     res.status(202).json({
       message:
-        'Registration accepted. Email verification is required before login.',
-      confirmationRequired: true,
-      user: {
-        id: user.id,
-        email: user.email,
-        roleId: user.roleId,
-        status: user.status,
-      },
+        'If the account exists and still needs verification, a confirmation email will be sent when eligible.',
     });
-  } catch (error) {
-    if (error instanceof AuthServiceError) {
-      res.status(error.statusCode).json({
-        error: error.message,
-        code: error.code,
+  },
+);
+
+// POST /api/verify-email
+router.post(
+  '/verify-email',
+  verifyEmailLimiter,
+  async (req, res) => {
+    const token: unknown =
+      req.body?.token;
+
+    try {
+      const verified =
+        await verifyEmailAddress(token);
+
+      if (!verified) {
+        res.status(400).json({
+          error:
+            'Verification link is invalid, expired, or has already been used.',
+        });
+        return;
+      }
+
+      res.status(200).json({
+        message:
+          'Email verified successfully. You can now sign in.',
       });
-      return;
+    } catch (error) {
+      console.error(
+        'Email verification failed:',
+        error instanceof Error
+          ? error.message
+          : 'Unknown error',
+      );
+
+      res.status(503).json({
+        error:
+          'Verification service unavailable',
+      });
     }
+  },
+);
 
-    console.error('Custom registration failed:', error);
-
-    res.status(503).json({
-      error: 'Registration service unavailable',
-    });
-  }
-});
 
 // POST /api/custom-auth/login
-router.post('/login', async (req, res) => {
+router.post(
+  '/login',
+  loginLimiter,
+  async (req, res) => {
   const { email, password } = req.body ?? {};
 
   if (
@@ -125,7 +241,9 @@ router.post('/login', async (req, res) => {
       // Do not disclose whether the email exists,
       // the password is wrong or verification is pending.
       res.status(401).json({
-        error: 'Invalid credentials or account unavailable',
+        error:
+          'Unable to sign in. Check your email and password, ' +
+          'and make sure your email address has been verified.',
       });
       return;
     }
@@ -144,7 +262,8 @@ router.post('/login', async (req, res) => {
       error: 'Authentication service unavailable',
     });
   }
-});
+},
+);
 
 // GET /api/custom-auth/me
 router.get(
