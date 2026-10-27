@@ -16,6 +16,8 @@ import Register from './pages/Register';
 import AuthShowcase from './pages/AuthShowcase';
 import RbacShowcase from './pages/RbacShowcase';
 import CustomLoginPage from './pages/CustomLoginPage';
+import VerifyEmailPage from './pages/VerifyEmailPage';
+import ResendVerificationPage from './pages/ResendVerificationPage';
 
 function App() {
   return (
@@ -38,6 +40,8 @@ function App() {
           <Route path="/inventory_overview" element={<ProtectedRoute><InventoryOverview /></ProtectedRoute>} />
           <Route path="/inventory_count" element={<ProtectedRoute><InventoryCount /></ProtectedRoute>} />
           <Route path="/stock_movement_history" element={<ProtectedRoute><StockMovementHistory /></ProtectedRoute>} />
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
+          <Route path="/resend-verification" element={<ResendVerificationPage />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
