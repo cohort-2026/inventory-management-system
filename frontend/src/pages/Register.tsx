@@ -377,6 +377,20 @@ export default function Register() {
           </form>
         )}
 
+        {customAuthEnabled && (
+          <p
+            className="field-hint"
+            style={{
+              marginBottom: 'var(--space-3)',
+            }}
+          >
+            Didn't receive a verification email?{' '}
+            <Link to="/resend-verification">
+              Request another verification link
+            </Link>
+          </p>
+        )}
+
         <Link
           to="/login"
           className="auth-link"
