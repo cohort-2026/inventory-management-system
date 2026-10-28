@@ -5,7 +5,7 @@ import type { CreatedSession } from './sessionService';
 
 export const CUSTOM_SESSION_COOKIE = 'ims_custom_session';
 
-const COOKIE_PATH = '/api/custom-auth';
+const COOKIE_PATH = '/api';
 
 const production = process.env.NODE_ENV === 'production';
 
