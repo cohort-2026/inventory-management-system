@@ -38,7 +38,14 @@ import {
   loginLimiter,
   resendVerificationLimiter,
   verifyEmailLimiter,
+  passwordResetRequestLimiter,
+  passwordResetConfirmLimiter,
 } from './customAuthRateLimits';
+
+import {
+  requestPasswordReset,
+  resetPassword,
+} from './passwordResetService';
 
 const router = Router();
 
@@ -309,5 +316,98 @@ if (process.env.NODE_ENV === 'development') {
         customRbacTestRoutes,
     )
 }
+
+// POST /api/custom-auth/forgot-password
+router.post(
+  '/forgot-password',
+  passwordResetRequestLimiter,
+  async (req, res) => {
+    const email: unknown = req.body?.email;
+
+    try {
+      await requestPasswordReset(email);
+    } catch (error) {
+      // an account exists to the requester.
+      console.error(
+        'Password recovery request failed:',
+        error instanceof Error
+          ? error.message
+          : 'Unknown error',
+      );
+    }
+
+    // unknown, verified and unverified emails.
+    res.status(202).json({
+      message:
+        "If an eligible account exists for that address, a password reset email will be sent when eligible.",
+    });
+  },
+);
+
+// POST api/custom-auth/reset-password
+router.post(
+  '/reset-password',
+  passwordResetConfirmLimiter,
+  async (req, res) => {
+    const token: unknown = req.body?.token;
+    const newPassword: unknown =
+      req.body?.newPassword;
+
+    if (
+      typeof newPassword !== 'string' ||
+      newPassword.length < 8 ||
+      Buffer.byteLength(newPassword, 'utf8') > 1024
+    ) {
+      res.status(400).json({
+        error:
+          'Password must be at least 8 characters and within the allowed length.',
+      });
+      return;
+    }
+
+    if (
+      typeof token !== 'string' ||
+      !/^[a-f0-9]{64}$/.test(token)
+    ) {
+      res.status(400).json({
+        error:
+          'Password reset link is invalid or expired.',
+      });
+      return;
+    }
+
+    try {
+      const success = await resetPassword(
+        token,
+        newPassword,
+      );
+
+      if (!success) {
+        res.status(400).json({
+          error:
+            'Password reset link is invalid, expired or already used.',
+        });
+        return;
+      }
+
+      res.status(200).json({
+        message:
+          'Password updated successfully. Please sign in again.',
+      });
+    } catch (error) {
+      console.error(
+        'Password reset failed:',
+        error instanceof Error
+          ? error.message
+          : 'Unknown error',
+      );
+
+      res.status(503).json({
+        error:
+          'Password reset service unavailable.',
+      });
+    }
+  }
+)
 
 export default router;

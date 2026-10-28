@@ -18,6 +18,8 @@ import RbacShowcase from './pages/RbacShowcase';
 import CustomLoginPage from './pages/CustomLoginPage';
 import VerifyEmailPage from './pages/VerifyEmailPage';
 import ResendVerificationPage from './pages/ResendVerificationPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 
 function App() {
   return (
@@ -42,6 +44,8 @@ function App() {
           <Route path="/stock_movement_history" element={<ProtectedRoute><StockMovementHistory /></ProtectedRoute>} />
           <Route path="/verify-email" element={<VerifyEmailPage />} />
           <Route path="/resend-verification" element={<ResendVerificationPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />}/>
+          <Route path="/reset-password" element={<ResetPasswordPage />}/>
         </Routes>
       </BrowserRouter>
     </AuthProvider>

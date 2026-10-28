@@ -30,3 +30,13 @@ export const verifyEmailLimiter = rateLimit({
   ...commonOptions,
   limit: 20,
 });
+
+export const passwordResetRequestLimiter = rateLimit({
+  ...commonOptions,
+  limit: 5,
+});
+
+export const passwordResetConfirmLimiter = rateLimit({
+  ...commonOptions,
+  limit: 20,
+});
