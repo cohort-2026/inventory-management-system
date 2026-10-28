@@ -617,4 +617,158 @@ router.patch(
   },
 );
 
+
+ // PATCH /api/products/:id/archive
+ // Issue #12: Archive a product without deleting its history.
+router.patch(
+  '/:id/archive',
+  requireSession,
+  customRequireRole('Manager', 'Inventory Staff'),
+  async (req, res): Promise<void> => {
+    const rawId = req.params.id;
+    const id = typeof rawId === 'string' ? rawId : '';
+
+    // Validate the product ID.
+    if (!UUID_PATTERN.test(id)) {
+      res.status(400).json({
+        error: 'Product id must be a valid UUID.',
+      });
+      return;
+    }
+
+    try {
+      // Check whether the product exists.
+      const productResult = await dbPool.query<
+        Pick<ProductRow, 'product_id' | 'status'>
+      >(
+        `
+          SELECT product_id, status
+          FROM public.products
+          WHERE product_id = $1
+          LIMIT 1
+        `,
+        [id],
+      );
+
+      if (productResult.rowCount !== 1) {
+        res.status(404).json({
+          error: 'Product not found.',
+        });
+        return;
+      }
+
+      const product = productResult.rows[0];
+
+      // Archiving an already archived product succeeds.
+      if (product.status === 'archived') {
+        res.status(200).json({
+          message: 'Product is already archived.',
+          product,
+        });
+        return;
+      }
+
+      /*
+       * IMPORTANT:
+       * This assumes BR-06 prevents archiving a product
+       * while positive stock remains in any location.
+       * Confirm this rule with your team.
+       */
+      const inventoryResult = await dbPool.query<{
+        has_stock: boolean;
+      }>(
+        `
+          SELECT EXISTS (
+            SELECT 1
+            FROM public.inventory
+            WHERE product_id = $1
+              AND quantity > 0
+          ) AS has_stock
+        `,
+        [id],
+      );
+
+      if (inventoryResult.rows[0]?.has_stock) {
+        res.status(409).json({
+          error:
+            'Cannot archive a product while stock remains in inventory.',
+        });
+        return;
+      }
+
+      // Archive the product without deleting its database row.
+      const archiveResult = await dbPool.query<ProductRow>(
+        `
+          UPDATE public.products
+          SET status = 'archived',
+              updated_at = now()
+          WHERE product_id = $1
+            AND status <> 'archived'
+          RETURNING
+            product_id,
+            category_id,
+            name,
+            sku,
+            description,
+            unit_of_measure,
+            reorder_level,
+            status,
+            created_at,
+            updated_at
+        `,
+        [id],
+      );
+
+      if (archiveResult.rowCount === 1) {
+        res.status(200).json({
+          product: archiveResult.rows[0],
+        });
+        return;
+      }
+
+      // Recheck if another request changed the product.
+      const currentResult = await dbPool.query<
+        Pick<ProductRow, 'product_id' | 'status'>
+      >(
+        `
+          SELECT product_id, status
+          FROM public.products
+          WHERE product_id = $1
+          LIMIT 1
+        `,
+        [id],
+      );
+
+      if (currentResult.rowCount !== 1) {
+        res.status(404).json({
+          error: 'Product not found.',
+        });
+        return;
+      }
+
+      if (currentResult.rows[0].status === 'archived') {
+        res.status(200).json({
+          message: 'Product is already archived.',
+          product: currentResult.rows[0],
+        });
+        return;
+      }
+
+      res.status(409).json({
+        error:
+          'Product could not be archived because its status changed.',
+      });
+    } catch (error) {
+      console.error(
+        'Archive product failed:',
+        error instanceof Error ? error.message : error,
+      );
+
+      res.status(500).json({
+        error: 'Unable to archive product.',
+      });
+    }
+  },
+);
+
 export default router;
