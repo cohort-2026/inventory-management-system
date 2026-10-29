@@ -12,6 +12,9 @@ import { requireRole } from './middleware/requireRole';
 import supabaseAuthRoutes from "./auth/supabaseAuthRoutes";
 import customAuthRoutes from "./auth/customAuthRoutes";
 import productsRoute from "./routes/products";
+import categoriesRouter from "./routes/categories";
+
+
 
 const app = express();
 
@@ -39,6 +42,7 @@ app.get('/api/admin', requireAuth, requireRole('admin'), (req, res) => {
 
 // Product creation - FR-03, BR-01
 app.use('/api/products', productsRoute);
+app.use('/api/categories', categoriesRouter);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
