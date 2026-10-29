@@ -771,4 +771,272 @@ router.patch(
   },
 );
 
+// GET /api/products
+router.get(
+  '/',
+  requireSession,
+  customRequireRole('Manager', 'Inventory Staff', 'Viewer'),
+  async (req, res): Promise<void> => {
+    const allowedQueryFields = new Set([
+      'search',
+      'category_id',
+      'status',
+      'includeArchived',
+      'page',
+      'pageSize',
+    ]);
+
+    // Reject unexpected query parameters and repeated values.
+    for (const [key, value] of Object.entries(req.query)) {
+      if (!allowedQueryFields.has(key)) {
+        res.status(400).json({
+          error: `Unknown query parameter: ${key}.`,
+        });
+        return;
+      }
+
+      if (typeof value !== 'string') {
+        res.status(400).json({
+          error: `${key} must have a single string value.`,
+        });
+        return;
+      }
+    }
+
+    const query = req.query as Record<string, string>;
+
+    // Pagination defaults and validation.
+    const pageText = query.page ?? '1';
+    const pageSizeText = query.pageSize ?? '20';
+
+    if (
+      !/^[1-9]\d*$/.test(pageText) ||
+      !/^[1-9]\d*$/.test(pageSizeText)
+    ) {
+      res.status(400).json({
+        error: 'page and pageSize must be positive integers.',
+      });
+      return;
+    }
+
+    const page = Number(pageText);
+    const pageSize = Number(pageSizeText);
+
+    if (
+      !Number.isSafeInteger(page) ||
+      !Number.isSafeInteger(pageSize) ||
+      pageSize > 100
+    ) {
+      res.status(400).json({
+        error:
+          'Invalid pagination. pageSize must not exceed 100.',
+      });
+      return;
+    }
+
+    const offset = (page - 1) * pageSize;
+
+    if (!Number.isSafeInteger(offset)) {
+      res.status(400).json({
+        error: 'Pagination offset is too large.',
+      });
+      return;
+    }
+
+    // Validate optional search.
+    let search: string | null = null;
+
+    if (query.search !== undefined) {
+      search = query.search.trim();
+
+      if (search.length > 200) {
+        res.status(400).json({
+          error: 'search must not exceed 200 characters.',
+        });
+        return;
+      }
+
+      if (!search) {
+        search = null;
+      }
+    }
+
+    // Validate category UUID.
+    let categoryId: string | null = null;
+
+    if (query.category_id !== undefined) {
+      categoryId = query.category_id.trim();
+
+      if (!UUID_PATTERN.test(categoryId)) {
+        res.status(400).json({
+          error: 'category_id must be a valid UUID.',
+        });
+        return;
+      }
+    }
+
+    // Validate status.
+    const status = query.status;
+
+    if (
+      status !== undefined &&
+      status !== 'active' &&
+      status !== 'archived'
+    ) {
+      res.status(400).json({
+        error: 'status must be active or archived.',
+      });
+      return;
+    }
+
+    // Strict boolean parsing.
+    const archivedText = query.includeArchived ?? 'false';
+
+    if (
+      archivedText !== 'true' &&
+      archivedText !== 'false'
+    ) {
+      res.status(400).json({
+        error: 'includeArchived must be true or false.',
+      });
+      return;
+    }
+
+    const includeArchived = archivedText === 'true';
+
+    // An explicit archived status is considered an
+    // intentional request to include archived products.
+    const showArchived =
+      includeArchived || status === 'archived';
+
+    // Parameterized filtering shared by both count
+    // and page queries.
+    const conditions: string[] = [];
+    const values: unknown[] = [];
+
+    function addCondition(
+      expression: string,
+      value: unknown,
+    ): void {
+      values.push(value);
+
+      conditions.push(
+        expression.replace('$VALUE', `$${values.length}`),
+      );
+    }
+
+
+    if (search !== null) {
+      // Treat search input as literal text.
+      // Search both product name and SKU,
+      // ignoring case.
+      values.push(search);
+
+      const searchParameter = `$${values.length}`;
+
+      conditions.push(`
+        (
+          STRPOS(LOWER(p.name), LOWER(${searchParameter})) > 0
+          OR
+          STRPOS(LOWER(p.sku), LOWER(${searchParameter})) > 0
+        )
+      `);
+    }
+
+    if (categoryId !== null) {
+      addCondition(
+        'p.category_id = $VALUE',
+        categoryId,
+      );
+    }
+
+    if (status !== undefined) {
+      addCondition('p.status = $VALUE', status);
+    } else if (!showArchived) {
+      conditions.push("p.status = 'active'");
+    }
+
+    const whereClause = conditions.length > 0
+      ? `WHERE ${conditions.join(' AND ')}`
+      : '';
+
+    try {
+      // One statement ensures the count and returned
+      // page are based on the same database snapshot.
+      // Separate page and count CTEs also preserve the
+      // total when the requested page has no rows.
+      const result = await dbPool.query<{
+        total: string;
+        items: ProductRow[];
+      }>(
+        `
+          WITH filtered AS (
+            SELECT
+              p.product_id,
+              p.category_id,
+              p.name,
+              p.sku,
+              p.description,
+              p.unit_of_measure,
+              p.reorder_level,
+              p.status,
+              p.created_at,
+              p.updated_at
+            FROM public.products AS p
+            ${whereClause}
+          ),
+          total_count AS (
+            SELECT COUNT(*)::text AS total
+            FROM filtered
+          ),
+          page_items AS (
+            SELECT *
+            FROM filtered
+            ORDER BY created_at DESC, product_id DESC
+            LIMIT $${values.length + 1}
+            OFFSET $${values.length + 2}
+          )
+          SELECT
+            total_count.total,
+            COALESCE(
+              (
+                SELECT jsonb_agg(
+                  to_jsonb(page_items)
+                  ORDER BY
+                    page_items.created_at DESC,
+                    page_items.product_id DESC
+                )
+                FROM page_items
+              ),
+              '[]'::jsonb
+            ) AS items
+          FROM total_count
+        `,
+        [...values, pageSize, offset],
+      );
+
+      const row = result.rows[0];
+
+      res.status(200).json({
+        items: row?.items ?? [],
+        total: Number(row?.total ?? '0'),
+        page,
+        pageSize,
+      });
+    } catch (error) {
+      console.error(
+        'List products failed:',
+        error instanceof Error
+          ? error.message
+          : error,
+      );
+
+      res.status(500).json({
+        error: 'Unable to retrieve products.',
+      });
+    }
+  },
+);
+
+
 export default router;
