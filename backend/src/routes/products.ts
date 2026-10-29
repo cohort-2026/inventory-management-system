@@ -659,6 +659,13 @@ router.patch(
 
       const product = productResult.rows[0];
 
+      if (!product) {
+          res.status(404).json({
+          error: 'Product not found.',
+        });
+       return;
+      }
+
       // Archiving an already archived product succeeds.
       if (product.status === 'archived') {
         res.status(200).json({
@@ -746,7 +753,16 @@ router.patch(
         return;
       }
 
-      if (currentResult.rows[0].status === 'archived') {
+      const currentProduct = currentResult.rows[0];
+
+      if (!currentProduct) {
+         res.status(404).json({
+          error: 'Product not found.',
+      });
+      return;
+   }
+
+      if (currentProduct.status === 'archived') {
         res.status(200).json({
           message: 'Product is already archived.',
           product: currentResult.rows[0],
@@ -757,9 +773,9 @@ router.patch(
       res.status(409).json({
         error:
           'Product could not be archived because its status changed.',
-      });
-    } catch (error) {
-      console.error(
+        });
+      } catch (error) {
+        console.error(
         'Archive product failed:',
         error instanceof Error ? error.message : error,
       );
