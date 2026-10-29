@@ -46,6 +46,7 @@ function App() {
           <Route path="/resend-verification" element={<ResendVerificationPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />}/>
           <Route path="/reset-password" element={<ResetPasswordPage />}/>
+          <Route path="/products/new" element={<ProtectedRoute><CreateProduct /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
