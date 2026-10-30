@@ -17,7 +17,7 @@ router.get(
   '/',
   requireSession,
   // Read access. Add any other role that uses the product screens.
-  customRequireRole('Manager', 'Inventory Staff'),
+  customRequireRole('Manager', 'Inventory Staff', 'Viewer'),
   async (_req, res): Promise<void> => {
     try {
       const result = await dbPool.query<CategoryRow>(

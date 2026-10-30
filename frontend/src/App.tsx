@@ -20,6 +20,7 @@ import VerifyEmailPage from './pages/VerifyEmailPage';
 import ResendVerificationPage from './pages/ResendVerificationPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import Settings from './pages/Settings';
 
 function App() {
   return (
@@ -47,6 +48,7 @@ function App() {
           <Route path="/forgot-password" element={<ForgotPasswordPage />}/>
           <Route path="/reset-password" element={<ResetPasswordPage />}/>
           <Route path="/products/new" element={<ProtectedRoute><CreateProduct /></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute allowedRoles={['Manager']}><Settings /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

@@ -1,4 +1,5 @@
 import { NavLink } from "react-router-dom";
+import { useAuth } from '../utils/AuthContext';
 
 const NAV_ITEMS = [
   { label: "Dashboard", path: "/dashboard" },
@@ -11,6 +12,7 @@ const NAV_ITEMS = [
 ];
 
 export default function Sidebar() {
+  const { user } = useAuth();
   return (
     <aside className="app-sidebar">
       <div className="sidebar-brand">
@@ -19,7 +21,12 @@ export default function Sidebar() {
       </div>
       <nav>
         <ul className="sidebar-nav">
-          {NAV_ITEMS.map((item) => (
+          {NAV_ITEMS
+          .filter((item) =>
+            item.path !== '/settings' ||
+            user?.roleName === 'Manager',
+          )
+          .map((item) => (
             <li key={item.path}>
               <NavLink
                 to={item.path}
