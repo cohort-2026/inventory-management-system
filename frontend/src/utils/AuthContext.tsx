@@ -145,7 +145,7 @@ export function AuthProvider({
     email: string,
     password: string,
   ): Promise<void> {
-    const data = await authRequest(
+    await authRequest(
       '/login',
       {
         method: 'POST',
@@ -154,7 +154,7 @@ export function AuthProvider({
           password,
         }),
       },
-    ) as { user: ServerUser };
+    );
 
     const me = await authRequest('/me') as {
       user: ServerUser;
