@@ -15,6 +15,7 @@ export default function Navbar() {
         <Link to="/adjust_stock">Adjust Stock</Link>
         <Link to="/transfer_stock">Transfer Stock</Link>
         <Link to="/inventory_overview">Inventory Overview</Link>
+        <Link to="/locations">Locations</Link>
         <Link to="/inventory_count">Inventory Count</Link>
         <Link to="/stock_movement_history">Stock Movement History</Link>
       </div>

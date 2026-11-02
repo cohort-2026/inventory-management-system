@@ -1,0 +1,216 @@
+.app-shell:has(.create-product-page) {
+  position: relative;
+  min-height: 100vh;
+  padding-top: 60px;
+  background: #fff;
+}
+
+.app-shell:has(.create-product-page) .app-sidebar {
+  position: absolute;
+  top: 60px;
+  bottom: 0;
+  left: 0;
+  width: 190px;
+  padding: 16px 10px;
+  border-right: 2px solid #444;
+  background: #f5f5f6;
+  color: #333;
+}
+
+.app-shell:has(.create-product-page) .sidebar-brand {
+  display: none;
+}
+
+.app-shell:has(.create-product-page) .sidebar-link {
+  padding: 8px 16px;
+  border-left: 4px solid transparent;
+  border-radius: 4px;
+  color: #333;
+  font-size: 14px;
+}
+
+.app-shell:has(.create-product-page) .sidebar-link.active {
+  border-left-color: #3d74ac;
+  background: #e8eff6;
+  color: #356da6;
+  font-weight: 600;
+}
+
+.app-shell:has(.create-product-page) .app-main {
+  width: 100%;
+  min-height: calc(100vh - 60px);
+}
+
+.app-shell:has(.create-product-page) .app-topbar {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 60px;
+  padding: 0 24px;
+  border-bottom: 2px solid #444;
+}
+
+.app-shell:has(.create-product-page) .app-topbar::before {
+  position: absolute;
+  left: 24px;
+  content: "■ INVENTORY APP";
+  color: #333;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.app-shell:has(.create-product-page) .app-topbar > .search-input {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 320px;
+  transform: translate(-50%, -50%);
+}
+
+.app-shell:has(.create-product-page) .app-content {
+  min-width: 0;
+  margin-left: 190px;
+  padding: 8px 32px 32px;
+  background: #fff;
+}
+
+.create-product-page .page-header {
+  margin-bottom: 8px;
+}
+
+.create-product-page .breadcrumb {
+  margin-bottom: 0;
+  font-size: 13px;
+}
+
+.create-product-page .page-title {
+  font-size: 22px;
+}
+
+.create-product-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.85fr) minmax(250px, 1fr);
+  align-items: start;
+  gap: 40px;
+}
+
+.create-product-form {
+  min-width: 0;
+}
+
+.create-product-section-title {
+  margin: 0 0 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #d7d7d7;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.create-product-form .field {
+  margin-bottom: 8px;
+  gap: 4px;
+}
+
+.create-product-form .field-label {
+  font-size: 13px;
+}
+
+.create-product-form .field-input,
+.create-product-form .field-select,
+.create-product-form .field-textarea {
+  border: 1px solid #555;
+  border-radius: 4px;
+}
+
+.create-product-form .field-input,
+.create-product-form .field-select {
+  min-height: 40px;
+}
+
+.create-product-form .field-textarea {
+  height: 80px;
+  min-height: 80px;
+}
+
+.create-product-half-field {
+  width: calc(50% - 12px);
+}
+
+.create-product-form .field-row {
+  gap: 24px;
+  margin-bottom: 0;
+}
+
+.create-product-form .page-actions {
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.create-product-form .btn {
+  min-width: 112px;
+  min-height: 40px;
+}
+
+.create-product-validation {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border: 1px solid #d2d2d2;
+  border-radius: 6px;
+  background: #f7f7f8;
+}
+
+.create-product-validation h2 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.create-product-validation .validation-list {
+  gap: 4px;
+  font-size: 12px;
+}
+
+@media (max-width: 860px) {
+  .app-shell:has(.create-product-page) .app-content {
+    padding-right: 20px;
+    padding-left: 20px;
+  }
+}
+
+@media (max-width: 600px) {
+  .app-shell:has(.create-product-page) .app-content {
+    padding: 16px;
+  }
+
+  .app-shell:has(.create-product-page) .app-sidebar {
+    width: 150px;
+    padding-right: 6px;
+    padding-left: 6px;
+  }
+
+  .app-shell:has(.create-product-page) .app-content {
+    margin-left: 150px;
+  }
+
+  .app-shell:has(.create-product-page) .app-topbar > .search-input {
+    left: 16px;
+    width: min(45%, 240px);
+    transform: translateY(-50%);
+  }
+
+  .create-product-layout {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .create-product-validation {
+    margin-top: 0;
+  }
+
+  .create-product-form .field-row {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}
