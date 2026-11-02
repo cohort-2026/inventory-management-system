@@ -1,9 +1,13 @@
-﻿import express from 'express';
+﻿import './config';
+import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
 import loginRoute from './routes/login';
 import helloRoute from './routes/hello';
+import registerRoute from './routes/register';
+import { requireAuth } from './middleware/requireAuth';
+import { requireRole } from './middleware/requireRole';
 
 import supabaseAuthRoutes from "./auth/supabaseAuthRoutes";
 import customAuthRoutes from "./auth/customAuthRoutes";
@@ -15,7 +19,7 @@ import adminUsersRoute from './routes/adminRoutes';
 
 const app = express();
 
-app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
+app.use(cors({ origin: ['http://localhost:5173'], credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
 
