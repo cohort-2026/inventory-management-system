@@ -15,6 +15,8 @@ import productsRoute from "./routes/products";
 import categoriesRouter from "./routes/categories";
 import locationsRoute from "./routes/locations";
 import adminUsersRoute from './routes/adminRoutes';
+import inventoryRoutes from "./routes/inventory";
+
 
 
 const app = express();
@@ -51,6 +53,7 @@ app.use('/api/locations', locationsRoute);
 // Admin related routes
 app.use('/api/admin/users', adminUsersRoute);
 
+app.use('/api/inventory', inventoryRoutes)
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
