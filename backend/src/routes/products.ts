@@ -1,0 +1,1058 @@
+
+import { Router } from 'express';
+
+import { dbPool } from '../db/pool';
+import { requireSession } from '../middleware/requireSession';
+import { customRequireRole } from '../middleware/customRequireRole';
+
+const router = Router();
+
+const ALLOWED_FIELDS = new Set([
+  'category_id',
+  'name',
+  'sku',
+  'description',
+  'unit_of_measure',
+  'reorder_level',
+  'status',
+]);
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+type ProductInput = {
+  category_id: string;
+  name: string;
+  sku: string;
+  description: string | null;
+  unit_of_measure: string;
+  reorder_level: number;
+  status: 'active' | 'archived';
+};
+
+type ProductRow = {
+  product_id: string;
+  category_id: string;
+  name: string;
+  sku: string;
+  description: string | null;
+  unit_of_measure: string;
+  reorder_level: string;
+  status: string;
+  created_at: Date;
+  updated_at: Date;
+};
+
+type DatabaseError = Error & {
+  code?: string;
+  constraint?: string;
+};
+
+function isObject(
+  value: unknown,
+): value is Record<string, unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value)
+  );
+}
+
+function validateProduct(
+  body: unknown,
+):
+  | { valid: true; data: ProductInput }
+  | { valid: false; error: string } {
+  if (!isObject(body)) {
+    return {
+      valid: false,
+      error: 'Request body must be a JSON object.',
+    };
+  }
+
+  const unknownFields = Object.keys(body).filter(
+    (field) => !ALLOWED_FIELDS.has(field),
+  );
+
+  if (unknownFields.length > 0) {
+    return {
+      valid: false,
+      error: `Unknown field(s): ${unknownFields.join(', ')}.`,
+    };
+  }
+
+  if (
+    typeof body.category_id !== 'string' ||
+    !UUID_PATTERN.test(body.category_id)
+  ) {
+    return {
+      valid: false,
+      error: 'category_id must be a valid UUID.',
+    };
+  }
+
+  if (
+    typeof body.name !== 'string' ||
+    !body.name.trim()
+  ) {
+    return {
+      valid: false,
+      error: 'name is required and must be a non-empty string.',
+    };
+  }
+
+  if (
+    typeof body.sku !== 'string' ||
+    !body.sku.trim()
+  ) {
+    return {
+      valid: false,
+      error: 'sku is required and must be a non-empty string.',
+    };
+  }
+
+  let description: string | null = null;
+
+  if (body.description !== undefined) {
+    if (
+      body.description !== null &&
+      typeof body.description !== 'string'
+    ) {
+      return {
+        valid: false,
+        error: 'description must be a string or null.',
+      };
+    }
+
+    description =
+      typeof body.description === 'string'
+        ? body.description.trim()
+        : null;
+  }
+
+  let unitOfMeasure = 'each';
+
+  if (body.unit_of_measure !== undefined) {
+    if (
+      typeof body.unit_of_measure !== 'string' ||
+      !body.unit_of_measure.trim()
+    ) {
+      return {
+        valid: false,
+        error: 'unit_of_measure must be a non-empty string.',
+      };
+    }
+
+    unitOfMeasure = body.unit_of_measure.trim();
+  }
+
+  let reorderLevel = 0;
+
+  if (body.reorder_level !== undefined) {
+    if (
+      typeof body.reorder_level !== 'number' ||
+      !Number.isFinite(body.reorder_level) ||
+      body.reorder_level < 0
+    ) {
+      return {
+        valid: false,
+        error: 'reorder_level must be a non-negative number.',
+      };
+    }
+
+    reorderLevel = body.reorder_level;
+  }
+
+  let status: 'active' | 'archived' = 'active';
+
+  if (body.status !== undefined) {
+    if (
+      body.status !== 'active' &&
+      body.status !== 'archived'
+    ) {
+      return {
+        valid: false,
+        error: 'status must be active or archived.',
+      };
+    }
+
+    status = body.status;
+  }
+
+  return {
+    valid: true,
+    data: {
+      category_id: body.category_id,
+      name: body.name.trim(),
+      sku: body.sku.trim(),
+      description,
+      unit_of_measure: unitOfMeasure,
+      reorder_level: reorderLevel,
+      status,
+    },
+  };
+}
+
+// POST /api/products
+router.post(
+  '/',
+  requireSession,
+  customRequireRole('Manager', 'Inventory Staff'),
+  async (req, res): Promise<void> => {
+    const validation = validateProduct(req.body);
+
+    if (!validation.valid) {
+      res.status(400).json({
+        error: validation.error,
+      });
+      return;
+    }
+
+    const product = validation.data;
+
+    try {
+      // Verify the referenced category exists.
+      const category = await dbPool.query(
+        `
+          SELECT 1
+          FROM public.categories
+          WHERE category_id = $1
+          LIMIT 1
+        `,
+        [product.category_id],
+      );
+
+      if (category.rowCount !== 1) {
+        res.status(400).json({
+          error: 'The specified category does not exist.',
+        });
+        return;
+      }
+
+      // Enforce SKU uniqueness through the database.
+      // Parameterized values prevent SQL injection.
+      const result = await dbPool.query<ProductRow>(
+        `
+          INSERT INTO public.products (
+            category_id,
+            name,
+            sku,
+            description,
+            unit_of_measure,
+            reorder_level,
+            status
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
+          RETURNING
+            product_id,
+            category_id,
+            name,
+            sku,
+            description,
+            unit_of_measure,
+            reorder_level,
+            status,
+            created_at,
+            updated_at
+        `,
+        [
+          product.category_id,
+          product.name,
+          product.sku,
+          product.description,
+          product.unit_of_measure,
+          product.reorder_level,
+          product.status,
+        ],
+      );
+
+      res.status(201).json({
+        product: result.rows[0],
+      });
+    } catch (error) {
+      const dbError = error as DatabaseError;
+
+      if (dbError.code === '23505') {
+        if (
+          dbError.constraint === 'products_sku_key'
+        ) {
+          res.status(409).json({
+            error: 'A product with this SKU already exists.',
+          });
+          return;
+        }
+
+        res.status(409).json({
+          error: 'A product with conflicting data already exists.',
+        });
+        return;
+      }
+
+      // Covers a category deleted between the
+      // existence check and the INSERT.
+      if (dbError.code === '23503') {
+        res.status(400).json({
+          error: 'The specified category does not exist.',
+        });
+        return;
+      }
+
+      // PostgreSQL rejected invalid input.
+      if (
+        dbError.code === '22P02' ||
+        dbError.code === '22003' ||
+        dbError.code === '23514' ||
+        dbError.code === '23502'
+      ) {
+        res.status(400).json({
+          error: 'Invalid product data.',
+        });
+        return;
+      }
+
+      console.error(
+        'Create product failed:',
+        error instanceof Error
+          ? error.message
+          : error,
+      );
+
+      res.status(500).json({
+        error: 'Unable to create product.',
+      });
+    }
+  },
+);
+
+// Fields PATCH may change. status is left out on purpose: archiving is #12.
+const EDITABLE_FIELDS = [
+  'category_id',
+  'name',
+  'sku',
+  'description',
+  'unit_of_measure',
+  'reorder_level',
+] as const;
+
+type EditableField = (typeof EDITABLE_FIELDS)[number];
+type ProductPatch = Partial<Pick<ProductInput, EditableField>>;
+
+// Set to true if archived products may still be edited (confirm with the team).
+const CAN_EDIT_ARCHIVED = true;
+
+function validateProductPatch(
+  body: unknown,
+):
+  | { valid: true; data: ProductPatch }
+  | { valid: false; error: string } {
+  if (!isObject(body)) {
+    return {
+      valid: false,
+      error: 'Request body must be a JSON object.',
+    };
+  }
+
+  if ('status' in body) {
+    return {
+      valid: false,
+      error: 'status cannot be changed here. Use the archive endpoint.',
+    };
+  }
+
+  const unknownFields = Object.keys(body).filter(
+    (field) =>
+      !(EDITABLE_FIELDS as readonly string[]).includes(field),
+  );
+
+  if (unknownFields.length > 0) {
+    return {
+      valid: false,
+      error: `Unknown or read-only field(s): ${unknownFields.join(', ')}.`,
+    };
+  }
+
+  if (Object.keys(body).length === 0) {
+    return {
+      valid: false,
+      error: 'Provide at least one field to update.',
+    };
+  }
+
+  const data: ProductPatch = {};
+
+  if (body.category_id !== undefined) {
+    if (
+      typeof body.category_id !== 'string' ||
+      !UUID_PATTERN.test(body.category_id)
+    ) {
+      return {
+        valid: false,
+        error: 'category_id must be a valid UUID.',
+      };
+    }
+    data.category_id = body.category_id;
+  }
+
+  if (body.name !== undefined) {
+    if (typeof body.name !== 'string' || !body.name.trim()) {
+      return {
+        valid: false,
+        error: 'name must be a non-empty string.',
+      };
+    }
+    data.name = body.name.trim();
+  }
+
+  if (body.sku !== undefined) {
+    if (typeof body.sku !== 'string' || !body.sku.trim()) {
+      return {
+        valid: false,
+        error: 'sku must be a non-empty string.',
+      };
+    }
+    data.sku = body.sku.trim();
+  }
+
+  if (body.description !== undefined) {
+    if (
+      body.description !== null &&
+      typeof body.description !== 'string'
+    ) {
+      return {
+        valid: false,
+        error: 'description must be a string or null.',
+      };
+    }
+    data.description =
+      typeof body.description === 'string'
+        ? body.description.trim()
+        : null;
+  }
+
+  if (body.unit_of_measure !== undefined) {
+    if (
+      typeof body.unit_of_measure !== 'string' ||
+      !body.unit_of_measure.trim()
+    ) {
+      return {
+        valid: false,
+        error: 'unit_of_measure must be a non-empty string.',
+      };
+    }
+    data.unit_of_measure = body.unit_of_measure.trim();
+  }
+
+  if (body.reorder_level !== undefined) {
+    if (
+      typeof body.reorder_level !== 'number' ||
+      !Number.isFinite(body.reorder_level) ||
+      body.reorder_level < 0
+    ) {
+      return {
+        valid: false,
+        error: 'reorder_level must be a non-negative number.',
+      };
+    }
+    data.reorder_level = body.reorder_level;
+  }
+
+  return { valid: true, data };
+}
+
+// PATCH /api/products/:id
+router.patch(
+  '/:id',
+  requireSession,
+  customRequireRole('Manager', 'Inventory Staff'),
+  async (req, res): Promise<void> => {
+    const rawId = req.params.id;
+    // Route params can be typed as string | string[] | undefined.
+    const id = typeof rawId === 'string' ? rawId : ''; 
+
+    if (!UUID_PATTERN.test(id)) {
+      res.status(400).json({
+        error: 'Product id must be a valid UUID.',
+      });
+      return;
+    }
+
+    const validation = validateProductPatch(req.body);
+
+    if (!validation.valid) {
+      res.status(400).json({
+        error: validation.error,
+      });
+      return;
+    }
+
+    const changes = validation.data;
+    const columns = Object.keys(changes) as EditableField[];
+
+    try {
+      // Verify the new category exists, if it is being changed.
+      if (changes.category_id !== undefined) {
+        const category = await dbPool.query(
+          `
+            SELECT 1
+            FROM public.categories
+            WHERE category_id = $1
+            LIMIT 1
+          `,
+          [changes.category_id],
+        );
+
+        if (category.rowCount !== 1) {
+          res.status(400).json({
+            error: 'The specified category does not exist.',
+          });
+          return;
+        }
+      }
+
+      // Column names come from the fixed list above, never from the request.
+      // Values are parameterized, which prevents SQL injection.
+      const assignments = columns.map(
+        (column, index) => `${column} = $${index + 1}`,
+      );
+      const values = columns.map((column) => changes[column]);
+      const archivedGuard = CAN_EDIT_ARCHIVED
+        ? ''
+        : "AND status <> 'archived'";
+
+      const result = await dbPool.query<ProductRow>(
+        `
+          UPDATE public.products
+          SET ${assignments.join(', ')}, updated_at = now()
+          WHERE product_id = $${columns.length + 1}
+          ${archivedGuard}
+          RETURNING
+            product_id,
+            category_id,
+            name,
+            sku,
+            description,
+            unit_of_measure,
+            reorder_level,
+            status,
+            created_at,
+            updated_at
+        `,
+        [...values, id],
+      );
+
+      if (result.rowCount === 1) {
+        res.status(200).json({
+          product: result.rows[0],
+        });
+        return;
+      }
+
+      // Nothing was updated: the product is missing, or it is archived.
+      const existing = await dbPool.query(
+        `
+          SELECT 1
+          FROM public.products
+          WHERE product_id = $1
+          LIMIT 1
+        `,
+        [id],
+      );
+
+      if (existing.rowCount !== 1) {
+        res.status(404).json({
+          error: 'Product not found.',
+        });
+        return;
+      }
+
+      res.status(409).json({
+        error: 'Archived products cannot be edited.',
+      });
+    } catch (error) {
+      const dbError = error as DatabaseError;
+
+      if (dbError.code === '23505') {
+        if (dbError.constraint === 'products_sku_key') {
+          res.status(409).json({
+            error: 'A product with this SKU already exists.',
+          });
+          return;
+        }
+
+        res.status(409).json({
+          error: 'A product with conflicting data already exists.',
+        });
+        return;
+      }
+
+      // A category deleted between the check and the UPDATE.
+      if (dbError.code === '23503') {
+        res.status(400).json({
+          error: 'The specified category does not exist.',
+        });
+        return;
+      }
+
+      if (
+        dbError.code === '22P02' ||
+        dbError.code === '22003' ||
+        dbError.code === '23514' ||
+        dbError.code === '23502'
+      ) {
+        res.status(400).json({
+          error: 'Invalid product data.',
+        });
+        return;
+      }
+
+      console.error(
+        'Edit product failed:',
+        error instanceof Error ? error.message : error,
+      );
+
+      res.status(500).json({
+        error: 'Unable to update product.',
+      });
+    }
+  },
+);
+
+
+ // PATCH /api/products/:id/archive
+ // Issue #12: Archive a product without deleting its history.
+router.patch(
+  '/:id/archive',
+  requireSession,
+  customRequireRole('Manager', 'Inventory Staff'),
+  async (req, res): Promise<void> => {
+    const rawId = req.params.id;
+    const id = typeof rawId === 'string' ? rawId : '';
+
+    // Validate the product ID.
+    if (!UUID_PATTERN.test(id)) {
+      res.status(400).json({
+        error: 'Product id must be a valid UUID.',
+      });
+      return;
+    }
+
+    try {
+      // Check whether the product exists.
+      const productResult = await dbPool.query<
+        Pick<ProductRow, 'product_id' | 'status'>
+      >(
+        `
+          SELECT product_id, status
+          FROM public.products
+          WHERE product_id = $1
+          LIMIT 1
+        `,
+        [id],
+      );
+
+      if (productResult.rowCount !== 1) {
+        res.status(404).json({
+          error: 'Product not found.',
+        });
+        return;
+      }
+
+      const product = productResult.rows[0];
+
+      if (!product) {
+          res.status(404).json({
+          error: 'Product not found.',
+        });
+       return;
+      }
+
+      // Archiving an already archived product succeeds.
+      if (product.status === 'archived') {
+        res.status(200).json({
+          message: 'Product is already archived.',
+          product,
+        });
+        return;
+      }
+
+      /*
+       * IMPORTANT:
+       * This assumes BR-06 prevents archiving a product
+       * while positive stock remains in any location.
+       * Confirm this rule with your team.
+       */
+      const inventoryResult = await dbPool.query<{
+        has_stock: boolean;
+      }>(
+        `
+          SELECT EXISTS (
+            SELECT 1
+            FROM public.inventory
+            WHERE product_id = $1
+              AND quantity > 0
+          ) AS has_stock
+        `,
+        [id],
+      );
+
+      if (inventoryResult.rows[0]?.has_stock) {
+        res.status(409).json({
+          error:
+            'Cannot archive a product while stock remains in inventory.',
+        });
+        return;
+      }
+
+      // Archive the product without deleting its database row.
+      const archiveResult = await dbPool.query<ProductRow>(
+        `
+          UPDATE public.products
+          SET status = 'archived',
+              updated_at = now()
+          WHERE product_id = $1
+            AND status <> 'archived'
+          RETURNING
+            product_id,
+            category_id,
+            name,
+            sku,
+            description,
+            unit_of_measure,
+            reorder_level,
+            status,
+            created_at,
+            updated_at
+        `,
+        [id],
+      );
+
+      if (archiveResult.rowCount === 1) {
+        res.status(200).json({
+          product: archiveResult.rows[0],
+        });
+        return;
+      }
+
+      // Recheck if another request changed the product.
+      const currentResult = await dbPool.query<
+        Pick<ProductRow, 'product_id' | 'status'>
+      >(
+        `
+          SELECT product_id, status
+          FROM public.products
+          WHERE product_id = $1
+          LIMIT 1
+        `,
+        [id],
+      );
+
+      if (currentResult.rowCount !== 1) {
+        res.status(404).json({
+          error: 'Product not found.',
+        });
+        return;
+      }
+
+      const currentProduct = currentResult.rows[0];
+
+      if (!currentProduct) {
+         res.status(404).json({
+          error: 'Product not found.',
+      });
+      return;
+   }
+
+      if (currentProduct.status === 'archived') {
+        res.status(200).json({
+          message: 'Product is already archived.',
+          product: currentResult.rows[0],
+        });
+        return;
+      }
+
+      res.status(409).json({
+        error:
+          'Product could not be archived because its status changed.',
+        });
+      } catch (error) {
+        console.error(
+        'Archive product failed:',
+        error instanceof Error ? error.message : error,
+      );
+
+      res.status(500).json({
+        error: 'Unable to archive product.',
+      });
+    }
+  },
+);
+
+// GET /api/products
+router.get(
+  '/',
+  requireSession,
+  customRequireRole('Manager', 'Inventory Staff', 'Viewer'),
+  async (req, res): Promise<void> => {
+    const allowedQueryFields = new Set([
+      'search',
+      'category_id',
+      'status',
+      'includeArchived',
+      'page',
+      'pageSize',
+    ]);
+
+    // Reject unexpected query parameters and repeated values.
+    for (const [key, value] of Object.entries(req.query)) {
+      if (!allowedQueryFields.has(key)) {
+        res.status(400).json({
+          error: `Unknown query parameter: ${key}.`,
+        });
+        return;
+      }
+
+      if (typeof value !== 'string') {
+        res.status(400).json({
+          error: `${key} must have a single string value.`,
+        });
+        return;
+      }
+    }
+
+    const query = req.query as Record<string, string>;
+
+    // Pagination defaults and validation.
+    const pageText = query.page ?? '1';
+    const pageSizeText = query.pageSize ?? '20';
+
+    if (
+      !/^[1-9]\d*$/.test(pageText) ||
+      !/^[1-9]\d*$/.test(pageSizeText)
+    ) {
+      res.status(400).json({
+        error: 'page and pageSize must be positive integers.',
+      });
+      return;
+    }
+
+    const page = Number(pageText);
+    const pageSize = Number(pageSizeText);
+
+    if (
+      !Number.isSafeInteger(page) ||
+      !Number.isSafeInteger(pageSize) ||
+      pageSize > 100
+    ) {
+      res.status(400).json({
+        error:
+          'Invalid pagination. pageSize must not exceed 100.',
+      });
+      return;
+    }
+
+    const offset = (page - 1) * pageSize;
+
+    if (!Number.isSafeInteger(offset)) {
+      res.status(400).json({
+        error: 'Pagination offset is too large.',
+      });
+      return;
+    }
+
+    // Validate optional search.
+    let search: string | null = null;
+
+    if (query.search !== undefined) {
+      search = query.search.trim();
+
+      if (search.length > 200) {
+        res.status(400).json({
+          error: 'search must not exceed 200 characters.',
+        });
+        return;
+      }
+
+      if (!search) {
+        search = null;
+      }
+    }
+
+    // Validate category UUID.
+    let categoryId: string | null = null;
+
+    if (query.category_id !== undefined) {
+      categoryId = query.category_id.trim();
+
+      if (!UUID_PATTERN.test(categoryId)) {
+        res.status(400).json({
+          error: 'category_id must be a valid UUID.',
+        });
+        return;
+      }
+    }
+
+    // Validate status.
+    const status = query.status;
+
+    if (
+      status !== undefined &&
+      status !== 'active' &&
+      status !== 'archived'
+    ) {
+      res.status(400).json({
+        error: 'status must be active or archived.',
+      });
+      return;
+    }
+
+    // Strict boolean parsing.
+    const archivedText = query.includeArchived ?? 'false';
+
+    if (
+      archivedText !== 'true' &&
+      archivedText !== 'false'
+    ) {
+      res.status(400).json({
+        error: 'includeArchived must be true or false.',
+      });
+      return;
+    }
+
+    const includeArchived = archivedText === 'true';
+
+    // An explicit archived status is considered an
+    // intentional request to include archived products.
+    const showArchived =
+      includeArchived || status === 'archived';
+
+    // Parameterized filtering shared by both count
+    // and page queries.
+    const conditions: string[] = [];
+    const values: unknown[] = [];
+
+    function addCondition(
+      expression: string,
+      value: unknown,
+    ): void {
+      values.push(value);
+
+      conditions.push(
+        expression.replace('$VALUE', `$${values.length}`),
+      );
+    }
+
+
+    if (search !== null) {
+      // Treat search input as literal text.
+      // Search both product name and SKU,
+      // ignoring case.
+      values.push(search);
+
+      const searchParameter = `$${values.length}`;
+
+      conditions.push(`
+        (
+          STRPOS(LOWER(p.name), LOWER(${searchParameter})) > 0
+          OR
+          STRPOS(LOWER(p.sku), LOWER(${searchParameter})) > 0
+        )
+      `);
+    }
+
+    if (categoryId !== null) {
+      addCondition(
+        'p.category_id = $VALUE',
+        categoryId,
+      );
+    }
+
+    if (status !== undefined) {
+      addCondition('p.status = $VALUE', status);
+    } else if (!showArchived) {
+      conditions.push("p.status = 'active'");
+    }
+
+    const whereClause = conditions.length > 0
+      ? `WHERE ${conditions.join(' AND ')}`
+      : '';
+
+    try {
+      // One statement ensures the count and returned
+      // page are based on the same database snapshot.
+      // Separate page and count CTEs also preserve the
+      // total when the requested page has no rows.
+      const result = await dbPool.query<{
+        total: string;
+        items: ProductRow[];
+      }>(
+        `
+          WITH filtered AS (
+            SELECT
+              p.product_id,
+              p.category_id,
+              p.name,
+              p.sku,
+              p.description,
+              p.unit_of_measure,
+              p.reorder_level,
+              p.status,
+              p.created_at,
+              p.updated_at
+            FROM public.products AS p
+            ${whereClause}
+          ),
+          total_count AS (
+            SELECT COUNT(*)::text AS total
+            FROM filtered
+          ),
+          page_items AS (
+            SELECT *
+            FROM filtered
+            ORDER BY created_at DESC, product_id DESC
+            LIMIT $${values.length + 1}
+            OFFSET $${values.length + 2}
+          )
+          SELECT
+            total_count.total,
+            COALESCE(
+              (
+                SELECT jsonb_agg(
+                  to_jsonb(page_items)
+                  ORDER BY
+                    page_items.created_at DESC,
+                    page_items.product_id DESC
+                )
+                FROM page_items
+              ),
+              '[]'::jsonb
+            ) AS items
+          FROM total_count
+        `,
+        [...values, pageSize, offset],
+      );
+
+      const row = result.rows[0];
+
+      res.status(200).json({
+        items: row?.items ?? [],
+        total: Number(row?.total ?? '0'),
+        page,
+        pageSize,
+      });
+    } catch (error) {
+      console.error(
+        'List products failed:',
+        error instanceof Error
+          ? error.message
+          : error,
+      );
+
+      res.status(500).json({
+        error: 'Unable to retrieve products.',
+      });
+    }
+  },
+);
+
+
+export default router;

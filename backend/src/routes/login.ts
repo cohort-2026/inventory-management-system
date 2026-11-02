@@ -24,10 +24,15 @@ router.post('/login', async (req, res) => {
 
     const token = jwt.sign({ username }, process.env.JWT_SECRET || 'dev-secret', { expiresIn: '1d'});
 
-    res.cookie('token', token, {
-        httpOnly: true,
-        maxAge: 24 * 60 * 60 * 1000,
-    })
+  if (!JWT_SECRET) {
+    return res.status(500).json({ error: 'Server configuration error' });
+  }
+
+  const token = jwt.sign(
+    { username: user.username, role: user.role },
+    JWT_SECRET,
+    { expiresIn: '1d' }
+  );
 
     res.json({ message: 'Login successful' });
 });

@@ -1,15 +1,52 @@
+
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../utils/AuthContext';
-import { ReactNode } from 'react';
 
-export default function ProtectedRoute({ children }: { children: ReactNode }) {
-    const { user, loading } = useAuth();
+import type { ReactNode } from 'react';
 
-    if (loading) return <div>Loading...</div>;
+type SystemRole =
+  | 'Manager'
+  | 'Inventory Staff'
+  | 'Viewer';
 
-    if (!user) {
-        return <Navigate to="/login" replace />;
-    }
+type ProtectedRouteProps = {
+  children: ReactNode;
+  allowedRoles?: SystemRole[];
+};
 
-    return <>{children}</>;
+export default function ProtectedRoute({
+  children,
+  allowedRoles,
+}: ProtectedRouteProps) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <div role="status">Loading...</div>;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (
+    allowedRoles &&
+    !allowedRoles.includes(
+      user.roleName as SystemRole,
+    )
+  ) {
+    return (
+      <div
+        role="alert"
+        style={{ padding: 'var(--space-5)' }}
+      >
+        <h1>Access Denied</h1>
+        <p>
+          Your account does not have permission
+          to access this page.
+        </p>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
 }
