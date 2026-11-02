@@ -21,6 +21,7 @@ export type AuthUser = {
   firstName?: string;
   lastName?: string;
   emailVerified?: boolean;
+  roleName?: 'Manager' | 'Inventory Staff' | 'Viewer' | null;
 };
 
 export type RegistrationResult = {
@@ -52,6 +53,7 @@ type ServerUser = {
   firstName?: string;
   lastName?: string;
   emailVerified?: boolean;
+  roleName?: 'Manager' | 'Inventory Staff' | 'Viewer' | null;
 };
 
 const AuthContext =
@@ -154,7 +156,11 @@ export function AuthProvider({
       },
     ) as { user: ServerUser };
 
-    setUser(normalizeUser(data.user));
+    const me = await authRequest('/me') as {
+      user: ServerUser;
+    };
+
+    setUser(normalizeUser(me.user));
   }
 
   async function register(

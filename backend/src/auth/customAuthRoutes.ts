@@ -47,6 +47,10 @@ import {
   resetPassword,
 } from './passwordResetService';
 
+import {
+  resolveAuthenticatedRole,
+} from '../middleware/customRequireRole';
+
 const router = Router();
 
 const FRONTEND_URL =
@@ -272,19 +276,45 @@ router.post(
 },
 );
 
+
 // GET /api/custom-auth/me
 router.get(
   '/me',
   requireSession,
-  (
+  async (
     req: SessionAuthenticatedRequest,
     res,
-  ) => {
-    res.status(200).json({
-      user: req.authenticatedUser,
-    });
+  ): Promise<void> => {
+    const user = req.authenticatedUser;
+
+    if (!user) {
+      res.status(401).json({
+        error: 'Authentication required',
+      });
+      return;
+    }
+
+    try {
+      const roleName = await resolveAuthenticatedRole(
+        user.roleId,
+      );
+
+      res.status(200).json({
+        user: {
+          ...user,
+          roleName,
+        },
+      });
+    } catch (error) {
+      console.error('Resolve user role failed:', error);
+
+      res.status(503).json({
+        error: 'Unable to retrieve account permissions.',
+      });
+    }
   },
 );
+
 
 // POST /api/custom-auth/logout
 router.post('/logout', async (req, res) => {

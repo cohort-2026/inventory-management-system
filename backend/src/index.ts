@@ -13,7 +13,8 @@ import supabaseAuthRoutes from "./auth/supabaseAuthRoutes";
 import customAuthRoutes from "./auth/customAuthRoutes";
 import productsRoute from "./routes/products";
 import categoriesRouter from "./routes/categories";
-
+import locationsRoute from "./routes/locations";
+import adminUsersRoute from './routes/adminRoutes';
 
 
 const app = express();
@@ -43,6 +44,12 @@ app.get('/api/admin', requireAuth, requireRole('admin'), (req, res) => {
 // Product creation - FR-03, BR-01
 app.use('/api/products', productsRoute);
 app.use('/api/categories', categoriesRouter);
+
+// Locations
+app.use('/api/locations', locationsRoute);
+
+// Admin related routes
+app.use('/api/admin/users', adminUsersRoute);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
