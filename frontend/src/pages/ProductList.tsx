@@ -324,20 +324,6 @@ export default function ProductList() {
         </div>
       </div>
 
-<<<<<<< HEAD
-      <DataTable
-        columns={[
-          { header: "Product", render: (p) => <Link to={`/products/${p.sku}`}>{p.name}</Link> },
-          { header: "SKU", render: (p) => p.sku, mono: true },
-          { header: "Category", render: (p) => p.category },
-          { header: "Stock", render: (p) => p.stock, mono: true },
-          { header: "Reorder", render: (p) => p.reorder, mono: true },
-          { header: "Status", render: (p) => <Badge status={p.status}>{p.status.toUpperCase()}</Badge> },
-        ]}
-        rows={PRODUCTS}
-        keyField={(p) => p.sku}
-      />
-=======
       {error && (
         <p
           className="field-error"
@@ -349,7 +335,6 @@ export default function ProductList() {
           {error}
         </p>
       )}
->>>>>>> testing
 
       {loading ? (
         <div

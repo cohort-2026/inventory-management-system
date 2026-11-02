@@ -2,10 +2,6 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './utils/AuthContext';
 import ProtectedRoute from './components/ProtectedRoutes';
 import Home from './pages/Home';
-<<<<<<< HEAD
-import Login from './pages/Login';
-=======
->>>>>>> testing
 import NotFound from './pages/NotFound';
 import ProductList from './pages/ProductList';
 import ProductDetails from './pages/ProductDetails';
@@ -16,8 +12,6 @@ import InventoryOverview from './pages/InventoryOverview';
 import InventoryCount from './pages/InventoryCount';
 import StockMovementHistory from './pages/StockMovementHistory';
 import Dashboard from './pages/Dashboard';
-<<<<<<< HEAD
-=======
 import Register from './pages/Register';
 import AuthShowcase from './pages/AuthShowcase';
 import RbacShowcase from './pages/RbacShowcase';
@@ -28,7 +22,6 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import Locations from './pages/Locations';
 import Settings from './pages/Settings';
->>>>>>> testing
 
 function App() {
   return (
@@ -36,14 +29,12 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Home />} />
-<<<<<<< HEAD
-          <Route path="/login" element={<Login />} />
-=======
           {/* <Route path="/login" element={<Login />} /> */}
           <Route path="/login" element={<CustomLoginPage />} />
->>>>>>> testing
           <Route path="*" element={<NotFound />} />
-
+          <Route path="/register" element={<Register />} />
+          <Route path="/auth-showcase" element={<ProtectedRoute><AuthShowcase /></ProtectedRoute>} />
+          <Route path="/rbac-showcase" element={<ProtectedRoute><RbacShowcase /></ProtectedRoute>} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/product_list" element={<ProtectedRoute><ProductList /></ProtectedRoute>} />
           <Route path="/product_list/:sku" element={<ProtectedRoute><ProductDetails /></ProtectedRoute>} />
