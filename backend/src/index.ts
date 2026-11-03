@@ -14,6 +14,7 @@ import customAuthRoutes from "./auth/customAuthRoutes";
 import productsRoute from "./routes/products";
 import categoriesRouter from "./routes/categories";
 import locationsRoute from "./routes/locations";
+import inventoryRoute from './routes/inventoryRoutes';
 import adminUsersRoute from './routes/adminRoutes';
 import inventoryRoutes from "./routes/inventory";
 
@@ -49,6 +50,7 @@ app.use('/api/categories', categoriesRouter);
 
 // Locations
 app.use('/api/locations', locationsRoute);
+app.use('/api/inventory', inventoryRoute);
 
 // Admin related routes
 app.use('/api/admin/users', adminUsersRoute);
