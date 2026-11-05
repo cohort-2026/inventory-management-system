@@ -1,6 +1,12 @@
 import type { Response } from 'express';
 import type { SessionAuthenticatedRequest } from '../middleware/requireSession';
 import { withTransaction } from '../db/withTransaction';
+import {
+  StockRuleError,
+  assertActiveStockProduct,
+  parsePositiveStockQuantity,
+  removeStockAtLocation,
+} from '../services/stockRules';
 
 type Direction = 'increase' | 'decrease';
 type AdjustmentInput = {
@@ -61,21 +67,7 @@ function parseAdjustment(body: unknown): AdjustmentInput {
   if (data.direction !== 'increase' && data.direction !== 'decrease') {
     throw new RequestError(400, 'direction must be increase or decrease.');
   }
-  // Preserve exact decimal values by passing them as text to PostgreSQL NUMERIC.
-  // JSON numbers are accepted; decimal strings are also accepted for exact precision.
-  const rawQuantity = data.quantity;
-  const quantity = typeof rawQuantity === 'number'
-    ? String(rawQuantity)
-    : rawQuantity;
-  if (
-    typeof quantity !== 'string' ||
-    !/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(quantity) ||
-    !/[1-9]/.test(quantity) ||
-    quantity.length > 100 ||
-    (typeof rawQuantity === 'number' && !Number.isFinite(rawQuantity))
-  ) {
-    throw new RequestError(400, 'quantity must be a positive finite decimal.');
-  }
+  const quantity = parsePositiveStockQuantity(data.quantity);
   if (typeof data.reason !== 'string' || !data.reason.trim() || data.reason.trim().length > 500) {
     throw new RequestError(400, 'reason is required (maximum 500 characters).');
   }
@@ -104,7 +96,7 @@ export async function createInventoryAdjustment(
   try {
     input = parseAdjustment(req.body);
   } catch (error) {
-    if (error instanceof RequestError) {
+    if (error instanceof RequestError || error instanceof StockRuleError) {
       res.status(error.statusCode).json({ error: error.message });
       return;
     }
@@ -119,15 +111,8 @@ export async function createInventoryAdjustment(
 
   try {
     const result = await withTransaction(async (client) => {
-      // Existing products must be usable. A missing product or location is 404.
-      const product = await client.query<{ status: string }>(
-        'SELECT status FROM public.products WHERE product_id = $1',
-        [input.product_id],
-      );
-      if (product.rowCount === 0) throw new RequestError(404, 'Product not found.');
-      if (product.rows[0]?.status !== 'active') {
-        throw new RequestError(400, 'Archived products cannot be adjusted.');
-      }
+      // Enforce the shared active-product rule within this transaction.
+      await assertActiveStockProduct(client, input.product_id);
 
       const location = await client.query(
         'SELECT location_id FROM public.locations WHERE location_id = $1',
@@ -155,22 +140,13 @@ export async function createInventoryAdjustment(
         );
         quantityRow = upsert.rows[0];
       } else {
-        // Atomic decrement. The existing CHECK (quantity >= 0) handles
-        // insufficient stock until Issue #22 adds dedicated business rules.
-        const update = await client.query<InventoryQuantityRow>(
-          `UPDATE public.inventory
-           SET quantity = quantity - $3::numeric
-           WHERE product_id = $1 AND location_id = $2
-           RETURNING inventory_id,
-                     (quantity + $3::numeric)::text AS quantity_before,
-                     quantity::text AS quantity_after`,
-          [input.product_id, input.location_id, input.quantity],
+        // Shared concurrency-safe removal rule, also reusable by stock transfers.
+        quantityRow = await removeStockAtLocation(
+          client,
+          input.product_id,
+          input.location_id,
+          input.quantity,
         );
-        quantityRow = update.rows[0];
-        if (!quantityRow) {
-          // No row means previous quantity is zero, so a decrease is impossible.
-          throw new RequestError(409, 'Insufficient stock at this location.');
-        }
       }
       if (!quantityRow) throw new Error('Inventory update returned no row.');
 
@@ -199,7 +175,7 @@ export async function createInventoryAdjustment(
 
     res.status(200).json(result);
   } catch (error) {
-    if (error instanceof RequestError) {
+    if (error instanceof RequestError || error instanceof StockRuleError) {
       res.status(error.statusCode).json({ error: error.message });
       return;
     }
