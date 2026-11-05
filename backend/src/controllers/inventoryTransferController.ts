@@ -1,6 +1,10 @@
+
 import type { Response } from 'express';
 import type { SessionAuthenticatedRequest } from '../middleware/requireSession';
-import { withTransaction } from '../db/withTransaction';
+import {
+  withTransaction,
+  TransactionConcurrencyError,
+} from '../db/withTransaction';
 import {
   StockRuleError,
   assertActiveStockProduct,
@@ -125,6 +129,7 @@ export async function createInventoryTransfer(
       res.status(error.statusCode).json({ error: error.message });
       return;
     }
+
     throw error;
   }
 
@@ -150,7 +155,51 @@ export async function createInventoryTransfer(
         throw new RequestError(404, 'Source or destination location not found.');
       }
 
-      // Remove stock from the source. Insufficient stock returns 409.
+      // Always prepare inventory rows in the same location_id order.
+      // Missing rows are created with zero stock inside this transaction.
+      const orderedLocationIds = [
+        input.from_location_id,
+        input.to_location_id,
+      ].sort();
+
+      for (const locationId of orderedLocationIds) {
+        await client.query(
+          `INSERT INTO public.inventory (
+             product_id, location_id, quantity
+           )
+           VALUES ($1, $2, 0)
+           ON CONFLICT (product_id, location_id) DO NOTHING`,
+          [input.product_id, locationId],
+        );
+      }
+
+      // Lock both inventory rows in a consistent order.
+      // Opposite transfers therefore acquire the same locks in the same order.
+      const lockedInventory = await client.query<{
+        inventory_id: string;
+        location_id: string;
+        quantity: string;
+      }>(
+        `SELECT inventory_id,
+                location_id,
+                quantity::text AS quantity
+         FROM public.inventory
+         WHERE product_id = $1
+           AND location_id = ANY($2::uuid[])
+         ORDER BY location_id
+         FOR UPDATE`,
+        [
+          input.product_id,
+          orderedLocationIds,
+        ],
+      );
+
+      if (lockedInventory.rows.length !== 2) {
+        throw new Error('Could not lock both inventory locations.');
+      }
+
+      // Remove stock from the source.
+      // The shared helper checks available stock and performs a guarded update.
       const source = await removeStockAtLocation(
         client,
         input.product_id,
@@ -158,8 +207,7 @@ export async function createInventoryTransfer(
         input.quantity,
       );
 
-      // Add the same quantity to the destination without overwriting
-      // stock that may already be there.
+      // Add the same quantity to the already-locked destination row.
       const destinationResult = await client.query<InventoryQuantityRow>(
         `WITH changed AS (
            INSERT INTO public.inventory AS inv (
@@ -253,6 +301,13 @@ export async function createInventoryTransfer(
 
     res.status(200).json(result);
   } catch (error) {
+    // The transaction helper retries concurrency failures once.
+    // If retries are exhausted, return HTTP 503.
+    if (error instanceof TransactionConcurrencyError) {
+      res.status(503).json({ error: error.message });
+      return;
+    }
+
     if (error instanceof RequestError || error instanceof StockRuleError) {
       res.status(error.statusCode).json({ error: error.message });
       return;
