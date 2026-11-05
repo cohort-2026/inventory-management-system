@@ -100,69 +100,86 @@ export async function getLocations(): Promise<LocationOption[]> {
   );
 }
 
+/**
+ * Fetch all pages rather than treating the paginated inventory endpoint as an array.
+ * The adjustment form needs all product/location pairs, not just page one.
+ */
 export async function getInventory(): Promise<InventoryRecord[]> {
-  const data = await request("/inventory");
-  const records = Array.isArray(data)
-    ? data
-    : isObject(data)
-      ? data.inventory
-      : undefined;
+  const pageSize = 100;
+  const maxPages = 1000;
+  const output: InventoryRecord[] = [];
 
-  if (
-    !Array.isArray(records) ||
-    !records.every(
-      (record) =>
-        isObject(record) &&
-        typeof record.inventory_id === "string" &&
-        typeof record.product_id === "string" &&
-        typeof record.location_id === "string" &&
-        (typeof record.quantity === "number" ||
-          (typeof record.quantity === "string" &&
-            Number.isFinite(Number(record.quantity)))) &&
-        typeof record.product_name === "string" &&
-        typeof record.product_sku === "string" &&
-        typeof record.location_name === "string",
-    )
-  ) {
-    throw new Error("The server returned an unexpected inventory response.");
+  for (let page = 1; page <= maxPages; page += 1) {
+    const data = await request(`/inventory?page=${page}&pageSize=${pageSize}`);
+    if (!isObject(data) || !Array.isArray(data.items) ||
+        typeof data.total !== "number" || !Number.isSafeInteger(data.total) || data.total < 0) {
+      throw new Error("The server returned an unexpected inventory response.");
+    }
+
+    for (const item of data.items) {
+      if (!isObject(item) ||
+          typeof item.inventory_id !== "string" ||
+          typeof item.product_id !== "string" ||
+          typeof item.location_id !== "string" ||
+          typeof item.name !== "string" ||
+          typeof item.sku !== "string" ||
+          typeof item.location_name !== "string" ||
+          (typeof item.quantity !== "string" && typeof item.quantity !== "number") ||
+          item.quantity === "" || !Number.isFinite(Number(item.quantity))) {
+        throw new Error("The server returned an invalid inventory record.");
+      }
+
+      output.push({
+        inventory_id: item.inventory_id,
+        product_id: item.product_id,
+        location_id: item.location_id,
+        quantity: Number(item.quantity),
+        product_name: item.name,
+        product_sku: item.sku,
+        location_name: item.location_name,
+      });
+    }
+
+    if (output.length >= data.total) return output;
+    if (data.items.length === 0) {
+      throw new Error("Inventory pagination ended before all records were received.");
+    }
   }
 
-  return records.map((record) => ({
-    ...(record as Omit<InventoryRecord, "quantity">),
-    quantity: Number(record.quantity),
-  }));
+  throw new Error("Inventory exceeds the supported page limit; refine the lookup API.");
 }
 
+export interface StockAdjustmentResult {
+  inventory_id: string;
+  quantity: number;
+}
+
+/** Convert the existing signed-input UI to the backend's direction + magnitude API. */
 export async function adjustInventory(
   adjustment: StockAdjustment,
-): Promise<InventoryRecord> {
-  const data = await request("/inventory/adjust", {
-    method: "PATCH",
+): Promise<StockAdjustmentResult> {
+  if (!Number.isFinite(adjustment.adjustment) || adjustment.adjustment === 0) {
+    throw new Error("Adjustment must be a non-zero finite number.");
+  }
+
+  const data = await request("/inventory/adjustments", {
+    method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(adjustment),
+    body: JSON.stringify({
+      product_id: adjustment.product_id,
+      location_id: adjustment.location_id,
+      direction: adjustment.adjustment > 0 ? "increase" : "decrease",
+      quantity: String(Math.abs(adjustment.adjustment)),
+      reason: adjustment.reason,
+      notes: adjustment.notes,
+    }),
   });
 
-  if (!isObject(data) || !isObject(data.inventory)) {
-    throw new Error("The server returned an unexpected adjustment response.");
+  if (!isObject(data) || typeof data.inventory_id !== "string" ||
+      (typeof data.quantity !== "string" && typeof data.quantity !== "number") ||
+      data.quantity === "" || !Number.isFinite(Number(data.quantity))) {
+    throw new Error("The server returned an unexpected adjustment response. Verify the operation before retrying.");
   }
 
-  const record = data.inventory;
-  if (
-    typeof record.inventory_id !== "string" ||
-    typeof record.product_id !== "string" ||
-    typeof record.location_id !== "string" ||
-    (typeof record.quantity !== "number" &&
-      !(typeof record.quantity === "string" &&
-        Number.isFinite(Number(record.quantity)))) ||
-    typeof record.product_name !== "string" ||
-    typeof record.product_sku !== "string" ||
-    typeof record.location_name !== "string"
-  ) {
-    throw new Error("The server returned an unexpected adjustment response.");
-  }
-
-  return {
-    ...(record as Omit<InventoryRecord, "quantity">),
-    quantity: Number(record.quantity),
-  };
+  return { inventory_id: data.inventory_id, quantity: Number(data.quantity) };
 }
