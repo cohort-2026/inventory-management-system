@@ -112,16 +112,30 @@ export default function AdjustStock() {
         notes: notes.trim(),
       });
 
+      // The adjustment API returns inventory_id and quantity, not product/location labels.
+      // Keep the labels from the already loaded picker options.
+      const selectedProduct = products.find((product) => product.product_id === productId);
+      const selectedLocation = locations.find((location) => location.location_id === locationId);
+      const updatedRecord: InventoryRecord = {
+        inventory_id: updatedInventory.inventory_id,
+        product_id: productId,
+        location_id: locationId,
+        quantity: updatedInventory.quantity,
+        product_name: selectedProduct?.name ?? "",
+        product_sku: selectedProduct?.sku ?? "",
+        location_name: selectedLocation?.name ?? "",
+      };
+
       setInventory((records) => {
         const existingIndex = records.findIndex(
-          (record) => record.inventory_id === updatedInventory.inventory_id,
+          (record) => record.inventory_id === updatedRecord.inventory_id,
         );
 
-        if (existingIndex < 0) return [...records, updatedInventory];
+        if (existingIndex < 0) return [...records, updatedRecord];
 
         return records.map((record) =>
-          record.inventory_id === updatedInventory.inventory_id
-            ? updatedInventory
+          record.inventory_id === updatedRecord.inventory_id
+            ? updatedRecord
             : record,
         );
       });
