@@ -3,6 +3,7 @@ import { getInventory } from '../controllers/inventoryController';
 import { createInventoryAdjustment } from '../controllers/inventoryAdjustmentController';
 import { requireSession } from '../middleware/requireSession';
 import { customRequireRole } from '../middleware/customRequireRole';
+import { createInventoryTransfer } from '../controllers/inventoryTransferController';
 
 const router = Router();
 
@@ -15,6 +16,14 @@ router.post(
   requireSession,
   customRequireRole('Manager', 'Inventory Staff'),
   createInventoryAdjustment,
+);
+
+// Stock transfers: Manager and Inventory Staff only.
+router.post(
+  '/transfers',
+  requireSession,
+  customRequireRole('Manager', 'Inventory Staff'),
+  createInventoryTransfer,
 );
 
 export default router;
