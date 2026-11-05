@@ -1,0 +1,107 @@
+
+.adjust-field {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-bottom: 22px;
+}
+
+.adjust-field label,
+.adjust-field legend {
+  font-weight: 600;
+  color: #263445;
+}
+
+.adjust-field input:not([type="radio"]),
+.adjust-field select,
+.adjust-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 7px;
+  font-size: 15px;
+  background: #fff;
+}
+
+.adjust-field textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+.adjust-field input:focus,
+.adjust-field select:focus,
+.adjust-field textarea:focus {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.adjust-field [aria-invalid="true"] {
+  border-color: #dc2626;
+}
+
+.adjust-field p {
+  color: #dc2626;
+  font-size: 13px;
+}
+
+.adjust-field fieldset {
+  border: none;
+  padding: 0;
+}
+
+.adjust-field fieldset label {
+  display: flex;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.current-stock,
+.new-stock {
+  background: #f3f6fa;
+  padding: 20px;
+  border-radius: 8px;
+  margin: 20px 0;
+}
+
+.current-stock h2,
+.new-stock h2 {
+  font-size: 25px;
+  margin-bottom: 0;
+}
+
+.new-stock {
+  border-left: 4px solid #2563eb;
+}
+
+.success-message {
+  padding: 12px;
+  background: #ecfdf5;
+  color: #166534;
+  border-radius: 6px;
+}
+
+form button[type="submit"] {
+  width: 100%;
+  padding: 14px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 7px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+form button[type="submit"]:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+  .adjust-field,
+  .current-stock,
+  .new-stock {
+    width: 100%;
+    box-sizing: border-box;
+  }
+}

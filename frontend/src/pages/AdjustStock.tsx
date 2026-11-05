@@ -1,249 +1,359 @@
-import { useEffect, useMemo, useState } from "react";
-import type { FormEvent } from "react";
-import { Link } from "react-router-dom";
+
+import { useState } from "react";
 import AppLayout from "../components/AppLayout";
 import PageHeader from "../components/PageHeader";
 import Card from "../components/Card";
-import SelectField from "../components/SelectField";
-import Field from "../components/Field";
-import {
-  adjustInventory,
-  getInventory,
-  getLocations,
-  getProducts,
-} from "../services/api";
-import type {
-  InventoryRecord,
-  LocationOption,
-  ProductOption,
-} from "../services/api";
+import "./AdjustStock.css";
 
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? error.message
-    : "An unexpected error occurred.";
-}
+// FRONTEND MOCK DATA
+const products = [
+  { id: 1, name: "Bananas" },
+  { id: 2, name: "Apples" },
+  { id: 3, name: "Oranges" },
+];
+
+const locations = [
+  { id: 1, name: "Main Warehouse" },
+  { id: 2, name: "Store Room" },
+  { id: 3, name: "Retail Store" },
+];
+
+// Mock inventory
+const initialInventory = [
+  { productId: 1, locationId: 1, quantity: 25 },
+  { productId: 1, locationId: 2, quantity: 10 },
+  { productId: 2, locationId: 1, quantity: 40 },
+  { productId: 2, locationId: 2, quantity: 15 },
+  { productId: 3, locationId: 1, quantity: 30 },
+  { productId: 3, locationId: 3, quantity: 12 },
+];
 
 export default function AdjustStock() {
-  const [products, setProducts] = useState<ProductOption[]>([]);
-  const [locations, setLocations] = useState<LocationOption[]>([]);
-  const [inventory, setInventory] = useState<InventoryRecord[]>([]);
+  const [inventory, setInventory] =
+    useState(initialInventory);
+
   const [productId, setProductId] = useState("");
   const [locationId, setLocationId] = useState("");
-  const [adjustment, setAdjustment] = useState("0");
+
+  const [type, setType] =
+    useState<"increase" | "decrease">("increase");
+
+  const [quantity, setQuantity] = useState("");
   const [reason, setReason] = useState("");
   const [notes, setNotes] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
 
-  useEffect(() => {
-    let active = true;
-
-    Promise.all([getProducts(), getLocations(), getInventory()])
-      .then(([loadedProducts, loadedLocations, loadedInventory]) => {
-        if (!active) return;
-
-        setProducts(loadedProducts);
-        setLocations(loadedLocations);
-        setInventory(loadedInventory);
-        setProductId(loadedProducts[0]?.product_id ?? "");
-        setLocationId(loadedLocations[0]?.location_id ?? "");
-      })
-      .catch((loadError: unknown) => {
-        if (active) setError(getErrorMessage(loadError));
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const currentQuantity = useMemo(
-    () =>
-      inventory.find(
-        (record) =>
-          record.product_id === productId &&
-          record.location_id === locationId,
-      )?.quantity ?? 0,
-    [inventory, locationId, productId],
+  const [message, setMessage] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>(
+    {}
   );
-  const adjustmentAmount = Number(adjustment);
-  const newQuantity = currentQuantity + adjustmentAmount;
-  const hasSelection = Boolean(productId && locationId);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  const [saving, setSaving] = useState(false);
+
+  // Find current stock
+  const selectedStock = inventory.find(
+    (item) =>
+      item.productId === Number(productId) &&
+      item.locationId === Number(locationId)
+  );
+
+  const currentStock = selectedStock?.quantity ?? null;
+
+  const amount = Number(quantity);
+
+  const newQuantity =
+    currentStock === null
+      ? null
+      : type === "increase"
+        ? currentStock + amount
+        : currentStock - amount;
+
+  // Validate fields
+  function validate() {
+    const newErrors: Record<string, string> = {};
+
+    if (!productId) {
+      newErrors.productId = "Please select a product.";
+    }
+
+    if (!locationId) {
+      newErrors.locationId = "Please select a location.";
+    }
+
+    if (
+      quantity.trim() === "" ||
+      !Number.isInteger(amount) ||
+      amount <= 0
+    ) {
+      newErrors.quantity =
+        "Enter a positive whole number.";
+    }
+
+    if (!reason.trim()) {
+      newErrors.reason = "Reason is required.";
+    }
+
+    if (
+      currentStock !== null &&
+      type === "decrease" &&
+      amount > currentStock
+    ) {
+      newErrors.quantity =
+        `Only ${currentStock} units are available in stock.`;
+    }
+
+    setErrors(newErrors);
+
+    return Object.keys(newErrors).length === 0;
+  }
+
+  // Save adjustment locally
+  function handleSubmit(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
     event.preventDefault();
-    setError("");
-    setSuccess("");
+    setMessage("");
 
-    if (!hasSelection) {
-      setError("Select an active product and location.");
-      return;
-    }
-
-    if (!Number.isFinite(adjustmentAmount) || adjustmentAmount === 0) {
-      setError("Enter a non-zero adjustment amount.");
-      return;
-    }
-
-    if (newQuantity < 0) {
-      setError("The adjustment cannot reduce stock below zero.");
-      return;
-    }
-
-    if (!reason) {
-      setError("Select a reason for the adjustment.");
-      return;
-    }
+    if (!validate()) return;
 
     setSaving(true);
 
-    try {
-      const updatedInventory = await adjustInventory({
-        product_id: productId,
-        location_id: locationId,
-        adjustment: adjustmentAmount,
-        reason,
-        notes: notes.trim(),
-      });
+    const updatedQuantity = newQuantity!;
 
-      setInventory((records) => {
-        const existingIndex = records.findIndex(
-          (record) => record.inventory_id === updatedInventory.inventory_id,
-        );
+    setInventory((previous) => {
+      const exists = previous.some(
+        (item) =>
+          item.productId === Number(productId) &&
+          item.locationId === Number(locationId)
+      );
 
-        if (existingIndex < 0) return [...records, updatedInventory];
+      if (!exists) {
+        return [
+          ...previous,
+          {
+            productId: Number(productId),
+            locationId: Number(locationId),
+            quantity: updatedQuantity,
+          },
+        ];
+      }
 
-        return records.map((record) =>
-          record.inventory_id === updatedInventory.inventory_id
-            ? updatedInventory
-            : record,
-        );
-      });
-      setAdjustment("0");
-      setNotes("");
-      setSuccess("Stock adjustment confirmed.");
-    } catch (submitError: unknown) {
-      setError(getErrorMessage(submitError));
-    } finally {
-      setSaving(false);
-    }
+      return previous.map((item) =>
+        item.productId === Number(productId) &&
+        item.locationId === Number(locationId)
+          ? { ...item, quantity: updatedQuantity }
+          : item
+      );
+    });
+
+    setMessage(
+      `Stock adjusted successfully! New quantity: ${updatedQuantity} units.`
+    );
+
+    setQuantity("");
+    setReason("");
+    setNotes("");
+    setErrors({});
+    setSaving(false);
   }
 
   return (
     <AppLayout>
-      <PageHeader title="Adjust Stock" />
+      <PageHeader
+        title="Adjust Stock"
+        subtitle="Increase or decrease available inventory."
+      />
 
-      <div className="form-with-sidebar">
-        <form onSubmit={handleSubmit}>
-          <SelectField
-            label="Product *"
-            options={products.map((product) => ({
-              value: product.product_id,
-              label: `${product.name} (${product.sku})`,
-            }))}
-            value={productId}
-            onChange={(event) => setProductId(event.target.value)}
-            required
-            disabled={loading || products.length === 0}
-          />
-          <SelectField
-            label="Location *"
-            options={locations.map((location) => ({
-              value: location.location_id,
-              label: location.name,
-            }))}
-            value={locationId}
-            onChange={(event) => setLocationId(event.target.value)}
-            required
-            disabled={loading || locations.length === 0}
-          />
+      <Card>
+        <form onSubmit={handleSubmit} noValidate>
 
-          <div className="field">
-            <span className="field-label">Current Quantity</span>
-            <p className="calc-result">{currentQuantity}</p>
+          <div className="adjust-field">
+            <label htmlFor="productId">Product</label>
+
+            <select
+              id="productId"
+              value={productId}
+              onChange={(e) => {
+                setProductId(e.target.value);
+                setMessage("");
+              }}
+              aria-invalid={!!errors.productId}
+              aria-describedby="productId-error"
+            >
+              <option value="">Select product</option>
+
+              {products.map((product) => (
+                <option key={product.id} value={product.id}>
+                  {product.name}
+                </option>
+              ))}
+            </select>
+
+            {errors.productId && (
+              <p id="productId-error" role="alert">
+                {errors.productId}
+              </p>
+            )}
           </div>
 
-          <Field
-            label="Adjustment *"
-            type="number"
-            step="any"
-            min={-currentQuantity}
-            value={adjustment}
-            onChange={(event) => setAdjustment(event.target.value)}
-            required
-            disabled={loading || !hasSelection}
-          />
+          <div className="adjust-field">
+            <label htmlFor="locationId">Location</label>
 
-          <div className="field">
-            <span className="field-label">New Quantity</span>
-            <p className="calc-result" style={{ color: "var(--color-success)" }}>
-              {Number.isFinite(newQuantity) ? newQuantity : "—"}
-            </p>
+            <select
+              id="locationId"
+              value={locationId}
+              onChange={(e) => {
+                setLocationId(e.target.value);
+                setMessage("");
+              }}
+              aria-invalid={!!errors.locationId}
+              aria-describedby="locationId-error"
+            >
+              <option value="">Select location</option>
+
+              {locations.map((location) => (
+                <option key={location.id} value={location.id}>
+                  {location.name}
+                </option>
+              ))}
+            </select>
+
+            {errors.locationId && (
+              <p id="locationId-error" role="alert">
+                {errors.locationId}
+              </p>
+            )}
           </div>
 
-          <SelectField
-            label="Reason *"
-            placeholder="Select reason"
-            options={[
-              { value: "recount", label: "Recount" },
-              { value: "damage", label: "Damage" },
-              { value: "received", label: "Received shipment" },
-            ]}
-            value={reason}
-            onChange={(event) => setReason(event.target.value)}
-            required
-            disabled={loading}
-          />
+          <div className="current-stock">
+            <span>Current Stock</span>
+            <h2>
+              {currentStock === null
+                ? "Select product and location"
+                : `${currentStock} units`}
+            </h2>
+          </div>
 
-          <div className="field">
-            <label className="field-label" htmlFor="notes">Notes</label>
+          <fieldset className="adjust-field">
+            <legend>Adjustment Type</legend>
+
+            <label>
+              <input
+                type="radio"
+                checked={type === "increase"}
+                onChange={() => setType("increase")}
+                name="type"
+              />
+              Increase Stock
+            </label>
+
+            <label>
+              <input
+                type="radio"
+                checked={type === "decrease"}
+                onChange={() => setType("decrease")}
+                name="type"
+              />
+              Decrease Stock
+            </label>
+          </fieldset>
+
+          <div className="adjust-field">
+            <label htmlFor="quantity">Quantity</label>
+
+            <input
+              id="quantity"
+              type="number"
+              min="1"
+              step="1"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              placeholder="Enter quantity"
+              aria-invalid={!!errors.quantity}
+              aria-describedby="quantity-error"
+            />
+
+            {errors.quantity && (
+              <p id="quantity-error" role="alert">
+                {errors.quantity}
+              </p>
+            )}
+          </div>
+
+          <div className="adjust-field">
+            <label htmlFor="reason">Reason</label>
+
+            <select
+              id="reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              aria-invalid={!!errors.reason}
+              aria-describedby="reason-error"
+            >
+              <option value="">Select reason</option>
+              <option value="New stock received">
+                New stock received
+              </option>
+              <option value="Damaged goods">
+                Damaged goods
+              </option>
+              <option value="Stock correction">
+                Stock correction
+              </option>
+              <option value="Stock count adjustment">
+                Stock count adjustment
+              </option>
+              <option value="Other">Other</option>
+            </select>
+
+            {errors.reason && (
+              <p id="reason-error" role="alert">
+                {errors.reason}
+              </p>
+            )}
+          </div>
+
+          <div className="adjust-field">
+            <label htmlFor="notes">Notes (Optional)</label>
+
             <textarea
               id="notes"
-              className="field-textarea"
               value={notes}
-              onChange={(event) => setNotes(event.target.value)}
-              maxLength={2000}
-              disabled={loading}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Additional information..."
+              aria-invalid={false}
+              aria-describedby="notes-help"
             />
+
+            <small id="notes-help">
+              Optional additional information.
+            </small>
           </div>
 
-          {loading && <p role="status">Loading products and stock…</p>}
-          {!loading && products.length === 0 && (
-            <p role="alert">No active products are available to adjust.</p>
-          )}
-          {!loading && locations.length === 0 && (
-            <p role="alert">No active locations are available to adjust.</p>
-          )}
-          {error && <p role="alert" className="field-error">{error}</p>}
-          {success && <p role="status">{success}</p>}
+          {newQuantity !== null &&
+            quantity !== "" &&
+            Number.isInteger(amount) &&
+            amount > 0 && (
+              <div className="new-stock">
+                <span>New Stock Quantity</span>
+                <h2>{newQuantity} units</h2>
+              </div>
+            )}
 
-          <div className="page-actions">
-            <Link to="/product_list" className="btn btn-secondary">Cancel</Link>
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={loading || saving || !hasSelection}
-            >
-              {saving ? "Saving…" : "Confirm Adjustment"}
-            </button>
-          </div>
+          {message && (
+            <p className="success-message" role="status">
+              {message}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={saving}
+          >
+            {saving ? "Saving..." : "Confirm Adjustment"}
+          </button>
+
         </form>
-
-        <Card title="Calculation">
-          <p className="calc-line">New = Current + Adjustment</p>
-          <p className="calc-result">
-            {currentQuantity} + {adjustment || 0} ={" "}
-            {Number.isFinite(newQuantity) ? newQuantity : "—"}
-          </p>
-          <p className="field-hint">Adjustments that would take stock below zero are blocked.</p>
-        </Card>
-      </div>
+      </Card>
     </AppLayout>
   );
 }
