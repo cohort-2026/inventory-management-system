@@ -39,8 +39,8 @@ function App() {
           <Route path="/product_list" element={<ProtectedRoute><ProductList /></ProtectedRoute>} />
           <Route path="/product_list/:sku" element={<ProtectedRoute><ProductDetails /></ProtectedRoute>} />
           <Route path="/create_product" element={<ProtectedRoute><CreateProduct /></ProtectedRoute>} />
-          <Route path="/adjust_stock" element={<ProtectedRoute><AdjustStock /></ProtectedRoute>} />
-          <Route path="/transfer_stock" element={<ProtectedRoute><TransferStock /></ProtectedRoute>} />
+          <Route path="/adjust_stock" element={<ProtectedRoute allowedRoles={['Manager', 'Inventory Staff']}><AdjustStock /></ProtectedRoute>} />
+          <Route path="/transfer_stock" element={<ProtectedRoute allowedRoles={['Manager', 'Inventory Staff']}><TransferStock /></ProtectedRoute>} />
           <Route path="/inventory_overview" element={<ProtectedRoute><InventoryOverview /></ProtectedRoute>} />
           <Route path="/inventory_count" element={<ProtectedRoute><InventoryCount /></ProtectedRoute>} />
           <Route path="/stock_movement_history" element={<ProtectedRoute><StockMovementHistory /></ProtectedRoute>} />
