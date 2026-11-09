@@ -21,7 +21,16 @@ import inventoryRoutes from "./routes/inventory";
 
 const app = express();
 
-app.use(cors({ origin: ['http://localhost:5173'], credentials: true }));
+const allowedOrigins = [
+  'http://localhost:5173',
+  process.env.FRONTEND_URL,
+].filter((origin): origin is string => Boolean(origin));
+
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true,
+}));
+
 app.use(express.json());
 app.use(cookieParser());
 
@@ -33,9 +42,7 @@ app.get('/health', (_req, res) => {
 
 // ROUTES THAT ARE FOR AUTHENTICATION & AUTHORIZATION
 // New authentication is isolated during development
-if (process.env.NODE_ENV === 'development') {
-  app.use('/api/custom-auth', customAuthRoutes);
-}
+app.use('/api/custom-auth', customAuthRoutes);
 
 app.get('/api/admin', requireAuth, requireRole('admin'), (req, res) => {
   res.json({ message: 'Admin-only data.' });
