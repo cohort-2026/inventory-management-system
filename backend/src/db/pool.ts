@@ -1,3 +1,4 @@
+
 import 'dotenv/config';
 import { Pool } from 'pg';
 import { readFileSync } from 'node:fs';
@@ -9,10 +10,16 @@ if (!connectionString) {
   throw new Error('DATABASE_URL is not configured');
 }
 
-const ca = readFileSync(
-  resolve(process.cwd(), 'certs', 'prod-ca-2021.crt'),
-  'utf8'
-);
+// Vercel: read the certificate from an environment variable.
+// Local development: use the existing certificate file.
+const environmentCertificate = process.env.DATABASE_CA_CERT;
+
+const ca = environmentCertificate
+  ? environmentCertificate.replace(/\\n/g, '\n')
+  : readFileSync(
+      resolve(process.cwd(), 'certs', 'prod-ca-2021.crt'),
+      'utf8',
+    );
 
 export const dbPool = new Pool({
   connectionString,
@@ -20,5 +27,6 @@ export const dbPool = new Pool({
     ca,
     rejectUnauthorized: true,
   },
+  max: 5,
   connectionTimeoutMillis: 10000,
 });
