@@ -78,7 +78,7 @@ export async function getProducts(): Promise<ProductOption[]> {
 }
 
 export async function getLocations(): Promise<LocationOption[]> {
-  const data = await request("/locations/");
+  const data = await request("/locations");
 
   if (
     !isObject(data) ||
