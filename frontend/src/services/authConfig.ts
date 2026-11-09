@@ -1,18 +1,15 @@
-
 export type AuthProviderName = 'custom' | 'supabase';
 
-const configuredProvider =
-  import.meta.env.VITE_AUTH_PROVIDER;
+const configuredProvider = import.meta.env.VITE_AUTH_PROVIDER;
 
 export const authProvider: AuthProviderName =
-  import.meta.env.DEV &&
-  configuredProvider === 'custom'
-    ? 'custom'
-    : 'supabase';
+  configuredProvider === 'supabase'
+    ? 'supabase'
+    : 'custom';
 
 const apiOrigin =
-  import.meta.env.VITE_API_URL ??
-  'http://localhost:5000';
+  (import.meta.env.VITE_API_URL ?? 'http://localhost:5000')
+    .replace(/\/$/, '');
 
 export const AUTH_API_BASE =
   `${apiOrigin}/api/${
