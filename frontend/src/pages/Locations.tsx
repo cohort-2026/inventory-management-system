@@ -9,7 +9,10 @@ type Location = {
   name: string;
 };
 
-const API_URL = `${import.meta.env.VITE_API_URL}/api/locations/`;
+// Use the same API origin configured for authentication and inventory.
+// The production Vercel rewrite expects /api/locations (without a trailing slash).
+const API_ORIGIN = (import.meta.env.VITE_API_URL ?? window.location.origin).replace(/\/+$/, "");
+const API_URL = `${API_ORIGIN}/api/locations`;
 
 function isLocation(value: unknown): value is Location {
   return (
@@ -32,6 +35,11 @@ async function fetchLocations(): Promise<Location[]> {
 
   if (!response.ok) {
     throw new Error(`Could not load locations (HTTP ${response.status}).`);
+  }
+
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.toLowerCase().includes("application/json")) {
+    throw new Error("Locations API returned a non-JSON response. Check the production API rewrite.");
   }
 
   const data: unknown = await response.json();
@@ -156,6 +164,11 @@ export default function Locations() {
 
         setFormError(message);
         return;
+      }
+
+      const contentType = response.headers.get("content-type") ?? "";
+      if (!contentType.toLowerCase().includes("application/json")) {
+        throw new Error("Locations API returned a non-JSON response. The location was not confirmed as created.");
       }
 
       // Clear the form after successful creation.
