@@ -16,6 +16,7 @@ import categoriesRouter from "./routes/categories";
 import locationsRoute from "./routes/locations";
 import adminUsersRoute from './routes/adminRoutes';
 import inventoryRoutes from "./routes/inventory";
+import inventoryCountsRouter from './routes/inventoryCounts';
 
 
 
@@ -61,5 +62,8 @@ app.use('/api/locations', locationsRoute);
 app.use('/api/admin/users', adminUsersRoute);
 
 app.use('/api/inventory', inventoryRoutes)
-
-export default app;
+app.use('/api/inventory/counts', inventoryCountsRouter);
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
