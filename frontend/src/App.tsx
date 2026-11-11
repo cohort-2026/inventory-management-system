@@ -10,6 +10,7 @@ import AdjustStock from './pages/AdjustStock';
 import TransferStock from './pages/TransferStock';
 import InventoryOverview from './pages/InventoryOverview';
 import InventoryCount from './pages/InventoryCount';
+import InventoryCountDetail from './pages/InventoryCountDetail';
 import StockMovementHistory from './pages/StockMovementHistory';
 import Dashboard from './pages/Dashboard';
 import Register from './pages/Register';
@@ -43,6 +44,7 @@ function App() {
           <Route path="/transfer_stock" element={<ProtectedRoute allowedRoles={['Manager', 'Inventory Staff']}><TransferStock /></ProtectedRoute>} />
           <Route path="/inventory_overview" element={<ProtectedRoute><InventoryOverview /></ProtectedRoute>} />
           <Route path="/inventory_count" element={<ProtectedRoute><InventoryCount /></ProtectedRoute>} />
+          <Route path="/inventory_count/:countId" element={<ProtectedRoute><InventoryCountDetail /></ProtectedRoute>} />
           <Route path="/stock_movement_history" element={<ProtectedRoute><StockMovementHistory /></ProtectedRoute>} />
           <Route path="/locations" element={<ProtectedRoute><Locations /></ProtectedRoute>} />
           <Route path="/verify-email" element={<VerifyEmailPage />} />
