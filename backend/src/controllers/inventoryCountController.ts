@@ -210,12 +210,32 @@ export async function finalizeInventoryCount(req: SessionAuthenticatedRequest, r
            ON CONFLICT (product_id, location_id) DO UPDATE SET quantity = $3`,
           [item.product_id, count.location_id, after]
         );
-        await client.query(
-          `INSERT INTO public.stock_movements (product_id, location_id, user_id, movement_type, quantity_change, quantity_before, quantity_after, reason, notes)
-           VALUES ($1, $2, $3, 'COUNT', $4::numeric, $5::numeric, $6::numeric, 'Inventory count', $7)`,
-          [item.product_id, count.location_id, userId, change, before, after, `Count ${id}`]
+       await client.query(
+         `INSERT INTO public.stock_movements (
+          product_id,
+          location_id,
+          user_id,
+          movement_type,
+          quantity_change,
+          quantity_before,
+          quantity_after,
+          reference_id,
+          reason,
+          notes
+         )
+         VALUES ($1, $2, $3, 'COUNT', $4::numeric, $5::numeric, $6::numeric, $7, 'Inventory count', $8)`,
+         [
+             item.product_id,
+             count.location_id,
+             userId,
+             change,
+             before,
+             after,
+             id,
+          `Count ${id}`,
+         ]
         );
-      }
+     }
 
       await client.query(
         `UPDATE public.inventory_counts SET status = 'completed', completed_by = $1, completed_at = NOW() WHERE count_id = $2`,
