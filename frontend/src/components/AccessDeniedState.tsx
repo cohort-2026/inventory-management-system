@@ -1,0 +1,3 @@
+export default function AccessDeniedState() {
+  return <div role="alert" className="card" style={{ padding: 'var(--space-4)' }}><h1>Access denied</h1><p>Your account does not have permission to view this page.</p></div>;
+}

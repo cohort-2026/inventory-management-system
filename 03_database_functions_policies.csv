@@ -1,0 +1,55 @@
+object_type,object_name,definition
+FUNCTION,handle_new_auth_user(),"CREATE OR REPLACE FUNCTION public.handle_new_auth_user()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+    viewer_role_id uuid;
+BEGIN
+    SELECT role_id INTO viewer_role_id
+    FROM public.roles
+    WHERE name = 'Viewer';
+
+    IF viewer_role_id IS NULL THEN
+        RAISE EXCEPTION 'Required Viewer role is missing';
+    END IF;
+
+    INSERT INTO public.users (user_id, role_id, first_name, last_name, email)
+    VALUES (
+        NEW.id,
+        viewer_role_id,
+        NULLIF(NEW.raw_user_meta_data ->> 'first_name', ''),
+        NULLIF(NEW.raw_user_meta_data ->> 'last_name', ''),
+        NEW.email
+    );
+    RETURN NEW;
+END;
+$function$
+"
+FUNCTION,set_updated_at(),"CREATE OR REPLACE FUNCTION public.set_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO ''
+AS $function$
+BEGIN
+    NEW.updated_at := now();
+    RETURN NEW;
+END;
+$function$
+"
+FUNCTION,sync_auth_user_email(),"CREATE OR REPLACE FUNCTION public.sync_auth_user_email()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+BEGIN
+    IF NEW.email IS DISTINCT FROM OLD.email THEN
+        UPDATE public.users SET email = NEW.email WHERE user_id = NEW.id;
+    END IF;
+    RETURN NEW;
+END;
+$function$
+"

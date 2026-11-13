@@ -177,6 +177,9 @@ export async function createInventoryAdjustment(
       if (location.rowCount === 0) {
         throw new RequestError(404, 'Location not found.');
       }
+      if (location.rows[0]?.status !== 'active') {
+        throw new RequestError(400, 'Location is inactive and cannot receive stock movements.');
+      }
 
       let quantityRow: InventoryQuantityRow | undefined;
 

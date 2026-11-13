@@ -1,6 +1,8 @@
 
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../utils/AuthContext';
+import LoadingState from './LoadingState';
+import AccessDeniedState from './AccessDeniedState';
 
 import type { ReactNode } from 'react';
 
@@ -21,7 +23,7 @@ export default function ProtectedRoute({
   const { user, loading } = useAuth();
 
   if (loading) {
-    return <div role="status">Loading...</div>;
+    return <LoadingState message="Checking permissions…" />;
   }
 
   if (!user) {
@@ -34,18 +36,7 @@ export default function ProtectedRoute({
       user.roleName as SystemRole,
     )
   ) {
-    return (
-      <div
-        role="alert"
-        style={{ padding: 'var(--space-5)' }}
-      >
-        <h1>Access Denied</h1>
-        <p>
-          Your account does not have permission
-          to access this page.
-        </p>
-      </div>
-    );
+    return <AccessDeniedState />;
   }
 
   return <>{children}</>;

@@ -1,0 +1,87 @@
+table_name,column_position,column_name,data_type,udt_name,is_nullable,column_default,character_maximum_length,numeric_precision,numeric_scale,is_identity,is_generated,generation_expression
+auth_action_tokens,1,action_id,uuid,uuid,NO,gen_random_uuid(),null,null,null,NO,NEVER,null
+auth_action_tokens,2,user_id,uuid,uuid,NO,null,null,null,null,NO,NEVER,null
+auth_action_tokens,3,purpose,character varying,varchar,NO,null,32,null,null,NO,NEVER,null
+auth_action_tokens,4,token_hash,bytea,bytea,NO,null,null,null,null,NO,NEVER,null
+auth_action_tokens,5,created_at,timestamp with time zone,timestamptz,NO,now(),null,null,null,NO,NEVER,null
+auth_action_tokens,6,expires_at,timestamp with time zone,timestamptz,NO,null,null,null,null,NO,NEVER,null
+auth_action_tokens,7,used_at,timestamp with time zone,timestamptz,YES,null,null,null,null,NO,NEVER,null
+auth_sessions,1,session_id,uuid,uuid,NO,gen_random_uuid(),null,null,null,NO,NEVER,null
+auth_sessions,2,user_id,uuid,uuid,NO,null,null,null,null,NO,NEVER,null
+auth_sessions,3,token_hash,bytea,bytea,NO,null,null,null,null,NO,NEVER,null
+auth_sessions,4,created_at,timestamp with time zone,timestamptz,NO,now(),null,null,null,NO,NEVER,null
+auth_sessions,5,expires_at,timestamp with time zone,timestamptz,NO,null,null,null,null,NO,NEVER,null
+auth_sessions,6,last_used_at,timestamp with time zone,timestamptz,YES,null,null,null,null,NO,NEVER,null
+auth_sessions,7,revoked_at,timestamp with time zone,timestamptz,YES,null,null,null,null,NO,NEVER,null
+categories,1,category_id,uuid,uuid,NO,gen_random_uuid(),null,null,null,NO,NEVER,null
+categories,2,name,character varying,varchar,NO,null,null,null,null,NO,NEVER,null
+categories,3,description,text,text,YES,null,null,null,null,NO,NEVER,null
+categories,4,status,character varying,varchar,NO,'active'::character varying,null,null,null,NO,NEVER,null
+categories,5,created_at,timestamp with time zone,timestamptz,NO,now(),null,null,null,NO,NEVER,null
+categories,6,updated_at,timestamp with time zone,timestamptz,NO,now(),null,null,null,NO,NEVER,null
+inventory,1,inventory_id,uuid,uuid,NO,gen_random_uuid(),null,null,null,NO,NEVER,null
+inventory,2,product_id,uuid,uuid,NO,null,null,null,null,NO,NEVER,null
+inventory,3,location_id,uuid,uuid,NO,null,null,null,null,NO,NEVER,null
+inventory,4,quantity,numeric,numeric,NO,0,null,null,null,NO,NEVER,null
+inventory,5,updated_at,timestamp with time zone,timestamptz,NO,now(),null,null,null,NO,NEVER,null
+inventory_count_items,1,item_id,uuid,uuid,NO,gen_random_uuid(),null,null,null,NO,NEVER,null
+inventory_count_items,2,count_id,uuid,uuid,NO,null,null,null,null,NO,NEVER,null
+inventory_count_items,3,product_id,uuid,uuid,NO,null,null,null,null,NO,NEVER,null
+inventory_count_items,4,expected_quantity,numeric,numeric,NO,0,null,null,null,NO,NEVER,null
+inventory_count_items,5,counted_quantity,numeric,numeric,YES,null,null,null,null,NO,NEVER,null
+inventory_counts,1,count_id,uuid,uuid,NO,gen_random_uuid(),null,null,null,NO,NEVER,null
+inventory_counts,2,location_id,uuid,uuid,NO,null,null,null,null,NO,NEVER,null
+inventory_counts,3,status,text,text,NO,'open'::text,null,null,null,NO,NEVER,null
+inventory_counts,4,note,text,text,YES,null,null,null,null,NO,NEVER,null
+inventory_counts,5,user_id,uuid,uuid,YES,null,null,null,null,NO,NEVER,null
+inventory_counts,6,completed_by,uuid,uuid,YES,null,null,null,null,NO,NEVER,null
+inventory_counts,7,completed_at,timestamp with time zone,timestamptz,YES,null,null,null,null,NO,NEVER,null
+inventory_counts,8,created_at,timestamp with time zone,timestamptz,YES,now(),null,null,null,NO,NEVER,null
+locations,1,location_id,uuid,uuid,NO,gen_random_uuid(),null,null,null,NO,NEVER,null
+locations,2,name,character varying,varchar,NO,null,null,null,null,NO,NEVER,null
+locations,3,code,character varying,varchar,NO,null,null,null,null,NO,NEVER,null
+locations,4,description,text,text,YES,null,null,null,null,NO,NEVER,null
+locations,5,address,text,text,YES,null,null,null,null,NO,NEVER,null
+locations,6,status,character varying,varchar,NO,'active'::character varying,null,null,null,NO,NEVER,null
+locations,7,created_at,timestamp with time zone,timestamptz,NO,now(),null,null,null,NO,NEVER,null
+locations,8,updated_at,timestamp with time zone,timestamptz,NO,now(),null,null,null,NO,NEVER,null
+products,1,product_id,uuid,uuid,NO,gen_random_uuid(),null,null,null,NO,NEVER,null
+products,2,category_id,uuid,uuid,NO,null,null,null,null,NO,NEVER,null
+products,3,name,character varying,varchar,NO,null,null,null,null,NO,NEVER,null
+products,4,sku,character varying,varchar,NO,null,null,null,null,NO,NEVER,null
+products,5,description,text,text,YES,null,null,null,null,NO,NEVER,null
+products,6,unit_of_measure,character varying,varchar,NO,'each'::character varying,null,null,null,NO,NEVER,null
+products,7,reorder_level,numeric,numeric,NO,0,null,null,null,NO,NEVER,null
+products,8,status,character varying,varchar,NO,'active'::character varying,null,null,null,NO,NEVER,null
+products,9,created_at,timestamp with time zone,timestamptz,NO,now(),null,null,null,NO,NEVER,null
+products,10,updated_at,timestamp with time zone,timestamptz,NO,now(),null,null,null,NO,NEVER,null
+roles,1,role_id,uuid,uuid,NO,gen_random_uuid(),null,null,null,NO,NEVER,null
+roles,2,name,character varying,varchar,NO,null,null,null,null,NO,NEVER,null
+roles,3,description,text,text,YES,null,null,null,null,NO,NEVER,null
+roles,4,created_at,timestamp with time zone,timestamptz,NO,now(),null,null,null,NO,NEVER,null
+stock_movements,1,movement_id,uuid,uuid,NO,gen_random_uuid(),null,null,null,NO,NEVER,null
+stock_movements,2,product_id,uuid,uuid,NO,null,null,null,null,NO,NEVER,null
+stock_movements,3,location_id,uuid,uuid,NO,null,null,null,null,NO,NEVER,null
+stock_movements,4,user_id,uuid,uuid,NO,null,null,null,null,NO,NEVER,null
+stock_movements,5,movement_type,character varying,varchar,NO,null,null,null,null,NO,NEVER,null
+stock_movements,6,quantity_change,numeric,numeric,NO,null,null,null,null,NO,NEVER,null
+stock_movements,7,quantity_before,numeric,numeric,NO,null,null,null,null,NO,NEVER,null
+stock_movements,8,quantity_after,numeric,numeric,NO,null,null,null,null,NO,NEVER,null
+stock_movements,9,reference_id,uuid,uuid,YES,null,null,null,null,NO,NEVER,null
+stock_movements,10,reason,character varying,varchar,YES,null,null,null,null,NO,NEVER,null
+stock_movements,11,notes,text,text,YES,null,null,null,null,NO,NEVER,null
+stock_movements,12,created_at,timestamp with time zone,timestamptz,NO,now(),null,null,null,NO,NEVER,null
+user_credentials,1,user_id,uuid,uuid,NO,null,null,null,null,NO,NEVER,null
+user_credentials,2,password_hash,text,text,NO,null,null,null,null,NO,NEVER,null
+user_credentials,3,email_verified_at,timestamp with time zone,timestamptz,YES,null,null,null,null,NO,NEVER,null
+user_credentials,4,password_changed_at,timestamp with time zone,timestamptz,NO,now(),null,null,null,NO,NEVER,null
+user_credentials,5,created_at,timestamp with time zone,timestamptz,NO,now(),null,null,null,NO,NEVER,null
+user_credentials,6,updated_at,timestamp with time zone,timestamptz,NO,now(),null,null,null,NO,NEVER,null
+users,1,user_id,uuid,uuid,NO,gen_random_uuid(),null,null,null,NO,NEVER,null
+users,2,role_id,uuid,uuid,NO,null,null,null,null,NO,NEVER,null
+users,3,first_name,character varying,varchar,YES,null,null,null,null,NO,NEVER,null
+users,4,last_name,character varying,varchar,YES,null,null,null,null,NO,NEVER,null
+users,5,email,character varying,varchar,NO,null,null,null,null,NO,NEVER,null
+users,6,status,character varying,varchar,NO,'active'::character varying,null,null,null,NO,NEVER,null
+users,7,created_at,timestamp with time zone,timestamptz,NO,now(),null,null,null,NO,NEVER,null
+users,8,updated_at,timestamp with time zone,timestamptz,NO,now(),null,null,null,NO,NEVER,null
