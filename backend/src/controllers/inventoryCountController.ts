@@ -77,6 +77,7 @@ export async function startInventoryCount(req: SessionAuthenticatedRequest, res:
       return c.rows[0];
     });
     if (!count) return res.status(404).json({ error: 'Location not found' });
+    if (count === 'inactive') return res.status(400).json({ error: 'Location is inactive.' });
     return res.status(201).json(count);
   } catch (e) { console.error(e); return res.status(500).json({ error: 'Failed to start count' }); }
 }

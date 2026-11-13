@@ -1,0 +1,18 @@
+object_type,object_name,definition
+EXTENSION,pg_stat_statements,1.11
+EXTENSION,pgcrypto,1.3
+EXTENSION,plpgsql,1.0
+EXTENSION,supabase_vault,0.3.1
+EXTENSION,uuid-ossp,1.1
+TABLE_SECURITY,public.auth_action_tokens,rls_enabled=t; rls_forced=f
+TABLE_SECURITY,public.auth_sessions,rls_enabled=t; rls_forced=f
+TABLE_SECURITY,public.categories,rls_enabled=t; rls_forced=f
+TABLE_SECURITY,public.inventory,rls_enabled=t; rls_forced=f
+TABLE_SECURITY,public.inventory_count_items,rls_enabled=t; rls_forced=f
+TABLE_SECURITY,public.inventory_counts,rls_enabled=t; rls_forced=f
+TABLE_SECURITY,public.locations,rls_enabled=t; rls_forced=f
+TABLE_SECURITY,public.products,rls_enabled=t; rls_forced=f
+TABLE_SECURITY,public.roles,rls_enabled=t; rls_forced=f
+TABLE_SECURITY,public.stock_movements,rls_enabled=t; rls_forced=f
+TABLE_SECURITY,public.user_credentials,rls_enabled=t; rls_forced=f
+TABLE_SECURITY,public.users,rls_enabled=t; rls_forced=f

@@ -95,6 +95,18 @@ router.use((req, res, next) => {
 router.post(
   '/register',
   registrationLimiter,
+  (req, res, next) => {
+    // Public registration is disabled by default. Demo-only opt-in is restricted
+    // to local development; production accounts require an admin-managed path.
+    if (process.env.NODE_ENV !== 'production' &&
+        process.env.ALLOW_PUBLIC_REGISTRATION === 'true') {
+      next();
+      return;
+    }
+    res.status(403).json({
+      error: 'Public registration is disabled. Contact an administrator for access.',
+    });
+  },
   async (req, res) => {
     try {
       const user = await registerUser(

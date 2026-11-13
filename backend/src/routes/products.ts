@@ -623,7 +623,7 @@ router.patch(
 router.patch(
   '/:id/archive',
   requireSession,
-  customRequireRole('Manager', 'Inventory Staff'),
+  customRequireRole('Manager'),
   async (req, res): Promise<void> => {
     const rawId = req.params.id;
     const id = typeof rawId === 'string' ? rawId : '';

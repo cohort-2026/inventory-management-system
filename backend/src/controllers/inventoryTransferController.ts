@@ -144,8 +144,8 @@ export async function createInventoryTransfer(
     const result = await withTransaction(async (client) => {
       await assertActiveStockProduct(client, input.product_id);
 
-      const locations = await client.query<{ location_id: string }>(
-        `SELECT location_id
+      const locations = await client.query<{ location_id: string; status: string }>(
+        `SELECT location_id, status
          FROM public.locations
          WHERE location_id = ANY($1::uuid[])`,
         [[input.from_location_id, input.to_location_id]],
@@ -153,6 +153,9 @@ export async function createInventoryTransfer(
 
       if (locations.rows.length !== 2) {
         throw new RequestError(404, 'Source or destination location not found.');
+      }
+      if (locations.rows.some((location) => location.status !== 'active')) {
+        throw new RequestError(400, 'Source and destination locations must be active.');
       }
 
       // Always prepare inventory rows in the same location_id order.
