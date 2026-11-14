@@ -4,7 +4,12 @@ import { dbPool } from '../db/pool';
 
 type MovementRow = {
   movement_id: string;
+  movement_no: string;
   movement_type: string;
+  reason_code_id: string | null;
+  reason_code_label: string | null;
+  reference_no: string | null;
+  reverses_movement_id: string | null;
   product_id: string;
   product_name: string;
   sku: string;
@@ -107,7 +112,11 @@ function parsePositiveInteger(
 function parseDate(
   value: string | null,
   name: string,
-): { value: string; dateOnly: boolean; timestamp: number } | null {
+): {
+  value: string;
+  dateOnly: boolean;
+  timestamp: number;
+} | null {
   if (value === null) {
     return null;
   }
@@ -130,11 +139,31 @@ function parseDate(
     const parts = value.split('-').map(Number);
     const [year, month, day] = parts;
 
-    if (parts.length !== 3 || year === undefined || month === undefined || day === undefined || Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) {
-    throw new Error('Invalid date format, expected YYYY-MM-DD');
+    if (
+      parts.length !== 3 ||
+      year === undefined ||
+      month === undefined ||
+      day === undefined ||
+      Number.isNaN(year) ||
+      Number.isNaN(month) ||
+      Number.isNaN(day)
+    ) {
+      throw new QueryError(
+        'Invalid date format, expected YYYY-MM-DD.',
+      );
     }
 
     const parsedDate = new Date(Date.UTC(year, month - 1, day));
+
+    if (
+      parsedDate.getUTCFullYear() !== year ||
+      parsedDate.getUTCMonth() !== month - 1 ||
+      parsedDate.getUTCDate() !== day
+    ) {
+      throw new QueryError(
+        `${name} must be a valid calendar date.`,
+      );
+    }
   }
 
   return { value, dateOnly, timestamp };
@@ -220,7 +249,9 @@ export async function getStockMovements(
       getDateBoundary(fromDate, false) >
         getDateBoundary(toDate, true)
     ) {
-      throw new QueryError('from must be earlier than or equal to to.');
+      throw new QueryError(
+        'from must be earlier than or equal to to.',
+      );
     }
 
     const page = parsePositiveInteger(
@@ -324,10 +355,17 @@ export async function getStockMovements(
     const rowsResult = await dbPool.query<MovementRow>(
       `SELECT
          sm.movement_id,
+         sm.movement_no,
          sm.movement_type,
+         sm.reason_code_id,
+         rc.label AS reason_code_label,
+         sm.reference_no,
+         sm.reverses_movement_id,
+
          sm.product_id,
          p.name AS product_name,
          p.sku,
+
          sm.location_id,
          l.name AS location_name,
          l.code AS location_code,
@@ -361,6 +399,9 @@ export async function getStockMovements(
        JOIN public.users AS u
          ON u.user_id = sm.user_id
 
+       LEFT JOIN public.reason_codes AS rc
+         ON rc.reason_code_id = sm.reason_code_id
+
        LEFT JOIN public.stock_movements AS paired
          ON sm.reference_id IS NOT NULL
          AND paired.reference_id = sm.reference_id
@@ -391,7 +432,14 @@ export async function getStockMovements(
 
     const items = rowsResult.rows.map((row) => ({
       movement_id: row.movement_id,
+      movement_no: row.movement_no,
       movement_type: row.movement_type,
+
+      reason_code_id: row.reason_code_id,
+      reason_code: row.reason_code_label,
+
+      reference_no: row.reference_no,
+      reverses_movement_id: row.reverses_movement_id,
 
       product: {
         product_id: row.product_id,
