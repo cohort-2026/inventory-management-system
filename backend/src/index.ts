@@ -1,11 +1,7 @@
-﻿import './config';
-import express from 'express';
+﻿import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
-import loginRoute from './routes/login';
 import helloRoute from './routes/hello';
-import registerRoute from './routes/register';
 import { requireAuth } from './middleware/requireAuth';
 import { requireRole } from './middleware/requireRole';
 
@@ -17,7 +13,8 @@ import locationsRoute from "./routes/locations";
 import adminUsersRoute from './routes/adminRoutes';
 import inventoryRoutes from "./routes/inventory";
 import inventoryCountsRouter from './routes/inventoryCounts';
-import stockMovementsRouter from './routes/stockMovements'
+import stockMovementsRouter from './routes/stockMovements';
+import reasonCodesRouter from './routes/reasonCodes';
 
 
 const app = express();
@@ -64,6 +61,7 @@ app.use('/api/admin/users', adminUsersRoute);
 app.use('/api/inventory', inventoryRoutes)
 app.use('/api/inventory/counts', inventoryCountsRouter);
 app.use('/api/stock-movements', stockMovementsRouter);
+app.use('/api/reason-codes', reasonCodesRouter);
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

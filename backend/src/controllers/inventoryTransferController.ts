@@ -36,7 +36,10 @@ type MovementRow = {
   reference_id: string;
 };
 
-type PgError = Error & { code?: string; constraint?: string };
+type PgError = Error & {
+  code?: string;
+  constraint?: string;
+};
 
 class RequestError extends Error {
   constructor(
@@ -65,13 +68,22 @@ function parseTransfer(body: unknown): TransferInput {
   }
 
   const data = body as Record<string, unknown>;
-  const unknown = Object.keys(data).filter((field) => !FIELDS.has(field));
 
-  if (unknown.length) {
-    throw new RequestError(400, `Unknown field(s): ${unknown.join(', ')}.`);
+  const unknown = Object.keys(data).filter(
+    (field) => !FIELDS.has(field),
+  );
+
+  if (unknown.length > 0) {
+    throw new RequestError(
+      400,
+      `Unknown field(s): ${unknown.join(', ')}.`,
+    );
   }
 
-  if (typeof data.product_id !== 'string' || !UUID_REGEX.test(data.product_id)) {
+  if (
+    typeof data.product_id !== 'string' ||
+    !UUID_REGEX.test(data.product_id)
+  ) {
     throw new RequestError(400, 'product_id must be a valid UUID.');
   }
 
@@ -101,9 +113,13 @@ function parseTransfer(body: unknown): TransferInput {
   if (
     data.note !== undefined &&
     data.note !== null &&
-    (typeof data.note !== 'string' || data.note.trim().length > 2000)
+    (typeof data.note !== 'string' ||
+      data.note.trim().length > 2000)
   ) {
-    throw new RequestError(400, 'note must be a string or null (maximum 2000 characters).');
+    throw new RequestError(
+      400,
+      'note must be a string or null (maximum 2000 characters).',
+    );
   }
 
   return {
@@ -111,7 +127,10 @@ function parseTransfer(body: unknown): TransferInput {
     from_location_id: data.from_location_id,
     to_location_id: data.to_location_id,
     quantity,
-    note: typeof data.note === 'string' ? data.note.trim() || null : null,
+    note:
+      typeof data.note === 'string'
+        ? data.note.trim() || null
+        : null,
   };
 }
 
@@ -125,8 +144,13 @@ export async function createInventoryTransfer(
   try {
     input = parseTransfer(req.body);
   } catch (error) {
-    if (error instanceof RequestError || error instanceof StockRuleError) {
-      res.status(error.statusCode).json({ error: error.message });
+    if (
+      error instanceof RequestError ||
+      error instanceof StockRuleError
+    ) {
+      res.status(error.statusCode).json({
+        error: error.message,
+      });
       return;
     }
 
@@ -136,27 +160,76 @@ export async function createInventoryTransfer(
   const userId = req.authenticatedUser?.id;
 
   if (!userId) {
-    res.status(401).json({ error: 'Authentication required.' });
+    res.status(401).json({
+      error: 'Authentication required.',
+    });
     return;
   }
 
   try {
     const result = await withTransaction(async (client) => {
+      // Verify that the product exists and is active.
       await assertActiveStockProduct(client, input.product_id);
 
-      const locations = await client.query<{ location_id: string }>(
-        `SELECT location_id
+      // Check the product's unit of measure.
+      const productResult = await client.query<{
+        unit_of_measure: string | null;
+      }>(
+        `SELECT unit_of_measure
+         FROM public.products
+         WHERE product_id = $1`,
+        [input.product_id],
+      );
+
+      const unitOfMeasure = String(
+        productResult.rows[0]?.unit_of_measure ?? '',
+      )
+        .trim()
+        .toLowerCase();
+
+      // Products measured in "each" must use whole-number quantities.
+      if (
+        unitOfMeasure === 'each' &&
+        !Number.isInteger(Number(input.quantity))
+      ) {
+        throw new RequestError(
+          400,
+          'Products measured in each require a whole-number transfer quantity.',
+        );
+      }
+
+      // Verify that both locations exist and are active.
+      const locations = await client.query<{
+        location_id: string;
+        status: string;
+      }>(
+        `SELECT location_id, status
          FROM public.locations
          WHERE location_id = ANY($1::uuid[])`,
         [[input.from_location_id, input.to_location_id]],
       );
 
       if (locations.rows.length !== 2) {
-        throw new RequestError(404, 'Source or destination location not found.');
+        throw new RequestError(
+          404,
+          'Source or destination location not found.',
+        );
       }
 
-      // Always prepare inventory rows in the same location_id order.
-      // Missing rows are created with zero stock inside this transaction.
+      if (
+        locations.rows.some(
+          (location) =>
+            String(location.status).toLowerCase() !== 'active',
+        )
+      ) {
+        throw new RequestError(
+          400,
+          'Source and destination locations must be active.',
+        );
+      }
+
+      // Prepare inventory rows in a consistent location order.
+      // Missing inventory rows are created with zero stock.
       const orderedLocationIds = [
         input.from_location_id,
         input.to_location_id,
@@ -165,24 +238,27 @@ export async function createInventoryTransfer(
       for (const locationId of orderedLocationIds) {
         await client.query(
           `INSERT INTO public.inventory (
-             product_id, location_id, quantity
+             product_id,
+             location_id,
+             quantity
            )
            VALUES ($1, $2, 0)
-           ON CONFLICT (product_id, location_id) DO NOTHING`,
+           ON CONFLICT (product_id, location_id)
+           DO NOTHING`,
           [input.product_id, locationId],
         );
       }
 
       // Lock both inventory rows in a consistent order.
-      // Opposite transfers therefore acquire the same locks in the same order.
       const lockedInventory = await client.query<{
         inventory_id: string;
         location_id: string;
         quantity: string;
       }>(
-        `SELECT inventory_id,
-                location_id,
-                quantity::text AS quantity
+        `SELECT
+           inventory_id,
+           location_id,
+           quantity::text AS quantity
          FROM public.inventory
          WHERE product_id = $1
            AND location_id = ANY($2::uuid[])
@@ -195,11 +271,13 @@ export async function createInventoryTransfer(
       );
 
       if (lockedInventory.rows.length !== 2) {
-        throw new Error('Could not lock both inventory locations.');
+        throw new Error(
+          'Could not lock both inventory locations.',
+        );
       }
 
       // Remove stock from the source.
-      // The shared helper checks available stock and performs a guarded update.
+      // The helper checks available stock and prevents negative inventory.
       const source = await removeStockAtLocation(
         client,
         input.product_id,
@@ -207,59 +285,90 @@ export async function createInventoryTransfer(
         input.quantity,
       );
 
-      // Add the same quantity to the already-locked destination row.
-      const destinationResult = await client.query<InventoryQuantityRow>(
-        `WITH changed AS (
-           INSERT INTO public.inventory AS inv (
-             product_id, location_id, quantity
+      // Add the same quantity to the destination.
+      const destinationResult =
+        await client.query<InventoryQuantityRow>(
+          `WITH changed AS (
+             INSERT INTO public.inventory AS inv (
+               product_id,
+               location_id,
+               quantity
+             )
+             VALUES ($1, $2, $3::numeric)
+             ON CONFLICT (product_id, location_id)
+             DO UPDATE
+               SET quantity = inv.quantity + EXCLUDED.quantity
+             RETURNING inventory_id, quantity
            )
-           VALUES ($1, $2, $3::numeric)
-           ON CONFLICT (product_id, location_id)
-           DO UPDATE SET quantity = inv.quantity + EXCLUDED.quantity
-           RETURNING inventory_id, quantity
-         )
-         SELECT inventory_id,
-                (quantity - $3::numeric)::text AS quantity_before,
-                quantity::text AS quantity_after
-         FROM changed`,
-        [input.product_id, input.to_location_id, input.quantity],
-      );
+           SELECT
+             inventory_id,
+             (quantity - $3::numeric)::text AS quantity_before,
+             quantity::text AS quantity_after
+           FROM changed`,
+          [
+            input.product_id,
+            input.to_location_id,
+            input.quantity,
+          ],
+        );
 
       const destination = destinationResult.rows[0];
 
       if (!destination) {
-        throw new Error('Destination inventory update returned no row.');
+        throw new Error(
+          'Destination inventory update returned no row.',
+        );
       }
 
-      // Both movement records share one reference_id to identify this transfer.
-      const referenceResult = await client.query<{ reference_id: string }>(
+      // Generate one reference ID for both transfer movements.
+      const referenceResult = await client.query<{
+        reference_id: string;
+      }>(
         'SELECT gen_random_uuid()::text AS reference_id',
       );
 
-      const referenceId = referenceResult.rows[0]?.reference_id;
+      const referenceId =
+        referenceResult.rows[0]?.reference_id;
 
       if (!referenceId) {
-        throw new Error('Could not generate transfer reference.');
+        throw new Error(
+          'Could not generate transfer reference.',
+        );
       }
 
+      // Record both transfer movements in the same transaction.
       const movements = await client.query<MovementRow>(
         `INSERT INTO public.stock_movements (
-           product_id, location_id, user_id, movement_type,
-           quantity_change, quantity_before, quantity_after,
-           reference_id, reason, notes
+           product_id,
+           location_id,
+           user_id,
+           movement_type,
+           quantity_change,
+           quantity_before,
+           quantity_after,
+           reference_id,
+           reason,
+           notes
          )
          VALUES
-           ($1, $2, $3, 'TRANSFER_OUT',
-            -$4::numeric, $5::numeric, $6::numeric,
-            $7::uuid, 'Stock transfer', $8),
-           ($1, $9, $3, 'TRANSFER_IN',
-            $4::numeric, $10::numeric, $11::numeric,
-            $7::uuid, 'Stock transfer', $8)
-         RETURNING movement_id, movement_type, location_id,
-                   quantity_change::text AS quantity_change,
-                   quantity_before::text AS quantity_before,
-                   quantity_after::text AS quantity_after,
-                   reference_id::text AS reference_id`,
+           (
+             $1, $2, $3, 'TRANSFER_OUT',
+             -$4::numeric, $5::numeric, $6::numeric,
+             $7::uuid, 'Stock transfer', $8
+           ),
+           (
+             $1, $9, $3, 'TRANSFER_IN',
+             $4::numeric, $10::numeric, $11::numeric,
+             $7::uuid, 'Stock transfer', $8
+           )
+         RETURNING
+           movement_id,
+           movement_type,
+           location_id,
+           quantity_change::text AS quantity_change,
+           quantity_before::text AS quantity_before,
+           quantity_after::text AS quantity_after,
+           reference_id::text AS reference_id`,
         [
           input.product_id,
           input.from_location_id,
@@ -276,7 +385,9 @@ export async function createInventoryTransfer(
       );
 
       if (movements.rows.length !== 2) {
-        throw new Error('Transfer movement records were not created correctly.');
+        throw new Error(
+          'Transfer movement records were not created correctly.',
+        );
       }
 
       return {
@@ -301,15 +412,21 @@ export async function createInventoryTransfer(
 
     res.status(200).json(result);
   } catch (error) {
-    // The transaction helper retries concurrency failures once.
-    // If retries are exhausted, return HTTP 503.
+    // Concurrency failures are retried by the transaction helper.
     if (error instanceof TransactionConcurrencyError) {
-      res.status(503).json({ error: error.message });
+      res.status(503).json({
+        error: error.message,
+      });
       return;
     }
 
-    if (error instanceof RequestError || error instanceof StockRuleError) {
-      res.status(error.statusCode).json({ error: error.message });
+    if (
+      error instanceof RequestError ||
+      error instanceof StockRuleError
+    ) {
+      res.status(error.statusCode).json({
+        error: error.message,
+      });
       return;
     }
 
@@ -317,14 +434,21 @@ export async function createInventoryTransfer(
 
     if (
       pgError.code === '23514' &&
-      (pgError.constraint === 'inventory_quantity_nonnegative' ||
-        pgError.constraint === 'stock_movements_after_nonnegative')
+      (
+        pgError.constraint === 'inventory_quantity_nonnegative' ||
+        pgError.constraint === 'stock_movements_after_nonnegative'
+      )
     ) {
-      res.status(409).json({ error: 'Insufficient stock at this location.' });
+      res.status(409).json({
+        error: 'Insufficient stock at this location.',
+      });
       return;
     }
 
     console.error('Inventory transfer failed:', error);
-    res.status(500).json({ error: 'Unable to transfer inventory.' });
+
+    res.status(500).json({
+      error: 'Unable to transfer inventory.',
+    });
   }
 }

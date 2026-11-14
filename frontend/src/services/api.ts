@@ -1,3 +1,4 @@
+
 const API_BASE_URL = `${import.meta.env.VITE_API_URL ?? "http://localhost:5000"}/api`;
 
 export interface InventoryRecord {
@@ -23,19 +24,44 @@ export interface LocationOption {
   status: string;
 }
 
-export interface StockAdjustment {
+export type StockMovementType =
+  | "RECEIPT"
+  | "SALE"
+  | "CUSTOMER_RETURN"
+  | "WRITE_OFF"
+  | "ADJUSTMENT";
+
+export interface ReasonCode {
+  reason_code_id: string;
+  movement_type: StockMovementType;
+  code: string;
+  label: string;
+  requires_note: boolean;
+}
+
+export interface CreateStockMovementInput {
   product_id: string;
   location_id: string;
-  adjustment: number;
-  reason: string;
-  notes: string;
+  movement_type: StockMovementType;
+  quantity: string;
+  reason_code_id: string;
+  direction?: "increase" | "decrease";
+  reference_no?: string;
+  notes?: string;
+}
+
+export interface StockMovementResult {
+  movement: Record<string, unknown>;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-async function request(path: string, options: RequestInit = {}): Promise<unknown> {
+async function request(
+  path: string,
+  options: RequestInit = {},
+): Promise<unknown> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     credentials: "include",
@@ -44,6 +70,7 @@ async function request(path: string, options: RequestInit = {}): Promise<unknown
       ...options.headers,
     },
   });
+
   const data: unknown = await response.json().catch(() => ({}));
 
   if (!response.ok) {
@@ -51,6 +78,7 @@ async function request(path: string, options: RequestInit = {}): Promise<unknown
       isObject(data) && typeof data.error === "string"
         ? data.error
         : `Request failed. HTTP ${response.status}`;
+
     throw new Error(message);
   }
 
@@ -102,7 +130,6 @@ export async function getLocations(): Promise<LocationOption[]> {
 
 /**
  * Fetch all pages rather than treating the paginated inventory endpoint as an array.
- * The adjustment form needs all product/location pairs, not just page one.
  */
 export async function getInventory(): Promise<InventoryRecord[]> {
   const pageSize = 100;
@@ -110,22 +137,34 @@ export async function getInventory(): Promise<InventoryRecord[]> {
   const output: InventoryRecord[] = [];
 
   for (let page = 1; page <= maxPages; page += 1) {
-    const data = await request(`/inventory?page=${page}&pageSize=${pageSize}`);
-    if (!isObject(data) || !Array.isArray(data.items) ||
-        typeof data.total !== "number" || !Number.isSafeInteger(data.total) || data.total < 0) {
+    const data = await request(
+      `/inventory?page=${page}&pageSize=${pageSize}`,
+    );
+
+    if (
+      !isObject(data) ||
+      !Array.isArray(data.items) ||
+      typeof data.total !== "number" ||
+      !Number.isSafeInteger(data.total) ||
+      data.total < 0
+    ) {
       throw new Error("The server returned an unexpected inventory response.");
     }
 
     for (const item of data.items) {
-      if (!isObject(item) ||
-          typeof item.inventory_id !== "string" ||
-          typeof item.product_id !== "string" ||
-          typeof item.location_id !== "string" ||
-          typeof item.name !== "string" ||
-          typeof item.sku !== "string" ||
-          typeof item.location_name !== "string" ||
-          (typeof item.quantity !== "string" && typeof item.quantity !== "number") ||
-          item.quantity === "" || !Number.isFinite(Number(item.quantity))) {
+      if (
+        !isObject(item) ||
+        typeof item.inventory_id !== "string" ||
+        typeof item.product_id !== "string" ||
+        typeof item.location_id !== "string" ||
+        typeof item.name !== "string" ||
+        typeof item.sku !== "string" ||
+        typeof item.location_name !== "string" ||
+        (typeof item.quantity !== "string" &&
+          typeof item.quantity !== "number") ||
+        item.quantity === "" ||
+        !Number.isFinite(Number(item.quantity))
+      ) {
         throw new Error("The server returned an invalid inventory record.");
       }
 
@@ -140,46 +179,66 @@ export async function getInventory(): Promise<InventoryRecord[]> {
       });
     }
 
-    if (output.length >= data.total) return output;
+    if (output.length >= data.total) {
+      return output;
+    }
+
     if (data.items.length === 0) {
-      throw new Error("Inventory pagination ended before all records were received.");
+      throw new Error(
+        "Inventory pagination ended before all records were received.",
+      );
     }
   }
 
-  throw new Error("Inventory exceeds the supported page limit; refine the lookup API.");
+  throw new Error(
+    "Inventory exceeds the supported page limit; refine the lookup API.",
+  );
 }
 
-export interface StockAdjustmentResult {
-  inventory_id: string;
-  quantity: number;
-}
+export async function getReasonCodes(
+  movementType: StockMovementType,
+): Promise<ReasonCode[]> {
+  const data = await request(
+    `/reason-codes?movement_type=${encodeURIComponent(movementType)}`,
+  );
 
-/** Convert the existing signed-input UI to the backend's direction + magnitude API. */
-export async function adjustInventory(
-  adjustment: StockAdjustment,
-): Promise<StockAdjustmentResult> {
-  if (!Number.isFinite(adjustment.adjustment) || adjustment.adjustment === 0) {
-    throw new Error("Adjustment must be a non-zero finite number.");
+  if (
+    !isObject(data) ||
+    !Array.isArray(data.reason_codes) ||
+    !data.reason_codes.every(
+      (item) =>
+        isObject(item) &&
+        typeof item.reason_code_id === "string" &&
+        item.movement_type === movementType &&
+        typeof item.code === "string" &&
+        typeof item.label === "string" &&
+        typeof item.requires_note === "boolean",
+    )
+  ) {
+    throw new Error("The server returned an unexpected reason codes response.");
   }
 
-  const data = await request("/inventory/adjustments", {
+  return data.reason_codes as ReasonCode[];
+}
+
+export async function createStockMovement(
+  movement: CreateStockMovementInput,
+): Promise<StockMovementResult> {
+  const data = await request("/stock-movements", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      product_id: adjustment.product_id,
-      location_id: adjustment.location_id,
-      direction: adjustment.adjustment > 0 ? "increase" : "decrease",
-      quantity: String(Math.abs(adjustment.adjustment)),
-      reason: adjustment.reason,
-      notes: adjustment.notes,
-    }),
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(movement),
   });
 
-  if (!isObject(data) || typeof data.inventory_id !== "string" ||
-      (typeof data.quantity !== "string" && typeof data.quantity !== "number") ||
-      data.quantity === "" || !Number.isFinite(Number(data.quantity))) {
-    throw new Error("The server returned an unexpected adjustment response. Verify the operation before retrying.");
+  if (!isObject(data) || !isObject(data.movement)) {
+    throw new Error(
+      "The server returned an unexpected stock movement response. Verify the operation before retrying.",
+    );
   }
 
-  return { inventory_id: data.inventory_id, quantity: Number(data.quantity) };
+  return {
+    movement: data.movement,
+  };
 }
