@@ -1,30 +1,49 @@
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { AuthProvider } from './utils/AuthContext';
-import ProtectedRoute from './components/ProtectedRoutes';
-import Home from './pages/Home';
-import NotFound from './pages/NotFound';
-import ProductList from './pages/ProductList';
-import ProductDetails from './pages/ProductDetails';
-import CreateProduct from './pages/CreateProduct';
-import AdjustStock from './pages/AdjustStock';
-import TransferStock from './pages/TransferStock';
-import InventoryOverview from './pages/InventoryOverview';
-import InventoryCount from './pages/InventoryCount';
-import InventoryCountDetail from './pages/InventoryCountDetail';
-import StockMovementHistory from './pages/StockMovementHistory';
-import Dashboard from './pages/Dashboard';
-import Register from './pages/Register';
-import CustomLoginPage from './pages/CustomLoginPage';
-import VerifyEmailPage from './pages/VerifyEmailPage';
-import ResendVerificationPage from './pages/ResendVerificationPage';
-import ForgotPasswordPage from './pages/ForgotPasswordPage';
-import ResetPasswordPage from './pages/ResetPasswordPage';
-import Locations from './pages/Locations';
-import Settings from './pages/Settings';
+
+import {
+  BrowserRouter,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+} from "react-router-dom";
+
+import { AuthProvider } from "./utils/AuthContext";
+import ProtectedRoute from "./components/ProtectedRoutes";
+
+import Home from "./pages/Home";
+import NotFound from "./pages/NotFound";
+import ProductList from "./pages/ProductList";
+import ProductDetails from "./pages/ProductDetails";
+import CreateProduct from "./pages/CreateProduct";
+import AdjustStock from "./pages/AdjustStock";
+import TransferStock from "./pages/TransferStock";
+import InventoryOverview from "./pages/InventoryOverview";
+import InventoryCount from "./pages/InventoryCount";
+import InventoryCountDetail from "./pages/InventoryCountDetail";
+import StockMovementHistory from "./pages/StockMovementHistory";
+import Dashboard from "./pages/Dashboard";
+import Register from "./pages/Register";
+import CustomLoginPage from "./pages/CustomLoginPage";
+import VerifyEmailPage from "./pages/VerifyEmailPage";
+import ResendVerificationPage from "./pages/ResendVerificationPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
+import Locations from "./pages/Locations";
+import Settings from "./pages/Settings";
 
 function LegacyMovementRedirect() {
   const location = useLocation();
-  return <Navigate to={`/movements${location.search}`} replace />;
+
+  return (
+    <Navigate
+      to={`/movements${location.search}`}
+      replace
+    />
+  );
+}
+
+function LegacyProductRedirect() {
+  return <Navigate to="/product_list" replace />;
 }
 
 function App() {
@@ -33,28 +52,149 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Home />} />
-          {/* <Route path="/login" element={<Login />} /> */}
           <Route path="/login" element={<CustomLoginPage />} />
-          <Route path="*" element={<NotFound />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/product_list" element={<ProtectedRoute><ProductList /></ProtectedRoute>} />
-          <Route path="/product_list/:sku" element={<ProtectedRoute><ProductDetails /></ProtectedRoute>} />
-          <Route path="/create_product" element={<ProtectedRoute><CreateProduct /></ProtectedRoute>} />
-          <Route path="/adjust_stock" element={<ProtectedRoute allowedRoles={['Manager', 'Inventory Staff']}><AdjustStock /></ProtectedRoute>} />
-          <Route path="/transfer_stock" element={<ProtectedRoute allowedRoles={['Manager', 'Inventory Staff']}><TransferStock /></ProtectedRoute>} />
-          <Route path="/inventory_overview" element={<ProtectedRoute><InventoryOverview /></ProtectedRoute>} />
-          <Route path="/inventory_count" element={<ProtectedRoute><InventoryCount /></ProtectedRoute>} />
-          <Route path="/inventory_count/:countId" element={<ProtectedRoute><InventoryCountDetail /></ProtectedRoute>} />
-          <Route path="/movements" element={<ProtectedRoute><StockMovementHistory /></ProtectedRoute>} />
-          <Route path="/stock_movement_history" element={<LegacyMovementRedirect />} />
-          <Route path="/locations" element={<ProtectedRoute><Locations /></ProtectedRoute>} />
+
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/product_list"
+            element={
+              <ProtectedRoute>
+                <ProductList />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/products/:id"
+            element={
+              <ProtectedRoute>
+                <ProductDetails />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/product_list/:sku"
+            element={
+              <ProtectedRoute>
+                <LegacyProductRedirect />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/create_product"
+            element={
+              <ProtectedRoute>
+                <CreateProduct />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/products/new"
+            element={
+              <ProtectedRoute>
+                <CreateProduct />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/adjust_stock"
+            element={
+              <ProtectedRoute allowedRoles={["Manager", "Inventory Staff"]}>
+                <AdjustStock />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/transfer_stock"
+            element={
+              <ProtectedRoute allowedRoles={["Manager", "Inventory Staff"]}>
+                <TransferStock />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/inventory_overview"
+            element={
+              <ProtectedRoute>
+                <InventoryOverview />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/inventory_count"
+            element={
+              <ProtectedRoute>
+                <InventoryCount />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/inventory_count/:countId"
+            element={
+              <ProtectedRoute>
+                <InventoryCountDetail />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/movements"
+            element={
+              <ProtectedRoute>
+                <StockMovementHistory />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/stock_movement_history"
+            element={<LegacyMovementRedirect />}
+          />
+
+          <Route
+            path="/locations"
+            element={
+              <ProtectedRoute>
+                <Locations />
+              </ProtectedRoute>
+            }
+          />
+
           <Route path="/verify-email" element={<VerifyEmailPage />} />
-          <Route path="/resend-verification" element={<ResendVerificationPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />}/>
-          <Route path="/reset-password" element={<ResetPasswordPage />}/>
-          <Route path="/products/new" element={<ProtectedRoute><CreateProduct /></ProtectedRoute>} />
-          <Route path="/settings" element={<ProtectedRoute allowedRoles={['Manager']}><Settings /></ProtectedRoute>} />
+          <Route
+            path="/resend-verification"
+            element={<ResendVerificationPage />}
+          />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute allowedRoles={["Manager"]}>
+                <Settings />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

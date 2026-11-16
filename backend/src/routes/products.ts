@@ -202,16 +202,13 @@ router.post(
     const validation = validateProduct(req.body);
 
     if (!validation.valid) {
-      res.status(400).json({
-        error: validation.error,
-      });
+      res.status(400).json({ error: validation.error });
       return;
     }
 
     const product = validation.data;
 
     try {
-      // Verify the referenced category exists.
       const category = await dbPool.query(
         `
           SELECT 1
@@ -229,8 +226,6 @@ router.post(
         return;
       }
 
-      // Enforce SKU uniqueness through the database.
-      // Parameterized values prevent SQL injection.
       const result = await dbPool.query<ProductRow>(
         `
           INSERT INTO public.products (
@@ -273,23 +268,12 @@ router.post(
       const dbError = error as DatabaseError;
 
       if (dbError.code === '23505') {
-        if (
-          dbError.constraint === 'products_sku_key'
-        ) {
-          res.status(409).json({
-            error: 'A product with this SKU already exists.',
-          });
-          return;
-        }
-
         res.status(409).json({
-          error: 'A product with conflicting data already exists.',
+          error: 'A product with this SKU already exists.',
         });
         return;
       }
 
-      // Covers a category deleted between the
-      // existence check and the INSERT.
       if (dbError.code === '23503') {
         res.status(400).json({
           error: 'The specified category does not exist.',
@@ -297,12 +281,10 @@ router.post(
         return;
       }
 
-      // PostgreSQL rejected invalid input.
       if (
-        dbError.code === '22P02' ||
-        dbError.code === '22003' ||
-        dbError.code === '23514' ||
-        dbError.code === '23502'
+        ['22P02', '22003', '23514', '23502'].includes(
+          dbError.code ?? '',
+        )
       ) {
         res.status(400).json({
           error: 'Invalid product data.',
@@ -310,12 +292,7 @@ router.post(
         return;
       }
 
-      console.error(
-        'Create product failed:',
-        error instanceof Error
-          ? error.message
-          : error,
-      );
+      console.error('Create product failed:', error);
 
       res.status(500).json({
         error: 'Unable to create product.',
@@ -324,7 +301,7 @@ router.post(
   },
 );
 
-// Fields PATCH may change. status is left out on purpose: archiving is #12.
+// Fields that can be changed through PATCH.
 const EDITABLE_FIELDS = [
   'category_id',
   'name',
@@ -337,7 +314,6 @@ const EDITABLE_FIELDS = [
 type EditableField = (typeof EDITABLE_FIELDS)[number];
 type ProductPatch = Partial<Pick<ProductInput, EditableField>>;
 
-// Set to true if archived products may still be edited (confirm with the team).
 const CAN_EDIT_ARCHIVED = true;
 
 function validateProductPatch(
@@ -390,6 +366,7 @@ function validateProductPatch(
         error: 'category_id must be a valid UUID.',
       };
     }
+
     data.category_id = body.category_id;
   }
 
@@ -400,6 +377,7 @@ function validateProductPatch(
         error: 'name must be a non-empty string.',
       };
     }
+
     data.name = body.name.trim();
   }
 
@@ -410,6 +388,7 @@ function validateProductPatch(
         error: 'sku must be a non-empty string.',
       };
     }
+
     data.sku = body.sku.trim();
   }
 
@@ -423,6 +402,7 @@ function validateProductPatch(
         error: 'description must be a string or null.',
       };
     }
+
     data.description =
       typeof body.description === 'string'
         ? body.description.trim()
@@ -439,6 +419,7 @@ function validateProductPatch(
         error: 'unit_of_measure must be a non-empty string.',
       };
     }
+
     data.unit_of_measure = body.unit_of_measure.trim();
   }
 
@@ -453,6 +434,7 @@ function validateProductPatch(
         error: 'reorder_level must be a non-negative number.',
       };
     }
+
     data.reorder_level = body.reorder_level;
   }
 
@@ -466,8 +448,7 @@ router.patch(
   customRequireRole('Manager', 'Inventory Staff'),
   async (req, res): Promise<void> => {
     const rawId = req.params.id;
-    // Route params can be typed as string | string[] | undefined.
-    const id = typeof rawId === 'string' ? rawId : ''; 
+    const id = typeof rawId === 'string' ? rawId : '';
 
     if (!UUID_PATTERN.test(id)) {
       res.status(400).json({
@@ -479,9 +460,7 @@ router.patch(
     const validation = validateProductPatch(req.body);
 
     if (!validation.valid) {
-      res.status(400).json({
-        error: validation.error,
-      });
+      res.status(400).json({ error: validation.error });
       return;
     }
 
@@ -489,7 +468,6 @@ router.patch(
     const columns = Object.keys(changes) as EditableField[];
 
     try {
-      // Verify the new category exists, if it is being changed.
       if (changes.category_id !== undefined) {
         const category = await dbPool.query(
           `
@@ -509,12 +487,36 @@ router.patch(
         }
       }
 
-      // Column names come from the fixed list above, never from the request.
-      // Values are parameterized, which prevents SQL injection.
+      // Prevent SKU changes after stock movement history exists.
+      if (changes.sku !== undefined) {
+        const movementHistory = await dbPool.query(
+          `
+            SELECT 1
+            FROM public.stock_movements
+            WHERE product_id = $1
+            LIMIT 1
+          `,
+          [id],
+        );
+
+        if (
+          movementHistory.rowCount !== null &&
+          movementHistory.rowCount > 0
+        ) {
+          res.status(409).json({
+            error:
+              'SKU cannot be changed because this product has stock movement history.',
+          });
+          return;
+        }
+      }
+
       const assignments = columns.map(
         (column, index) => `${column} = $${index + 1}`,
       );
+
       const values = columns.map((column) => changes[column]);
+
       const archivedGuard = CAN_EDIT_ARCHIVED
         ? ''
         : "AND status <> 'archived'";
@@ -547,7 +549,6 @@ router.patch(
         return;
       }
 
-      // Nothing was updated: the product is missing, or it is archived.
       const existing = await dbPool.query(
         `
           SELECT 1
@@ -559,9 +560,7 @@ router.patch(
       );
 
       if (existing.rowCount !== 1) {
-        res.status(404).json({
-          error: 'Product not found.',
-        });
+        res.status(404).json({ error: 'Product not found.' });
         return;
       }
 
@@ -572,20 +571,12 @@ router.patch(
       const dbError = error as DatabaseError;
 
       if (dbError.code === '23505') {
-        if (dbError.constraint === 'products_sku_key') {
-          res.status(409).json({
-            error: 'A product with this SKU already exists.',
-          });
-          return;
-        }
-
         res.status(409).json({
-          error: 'A product with conflicting data already exists.',
+          error: 'A product with this SKU already exists.',
         });
         return;
       }
 
-      // A category deleted between the check and the UPDATE.
       if (dbError.code === '23503') {
         res.status(400).json({
           error: 'The specified category does not exist.',
@@ -594,10 +585,9 @@ router.patch(
       }
 
       if (
-        dbError.code === '22P02' ||
-        dbError.code === '22003' ||
-        dbError.code === '23514' ||
-        dbError.code === '23502'
+        ['22P02', '22003', '23514', '23502'].includes(
+          dbError.code ?? '',
+        )
       ) {
         res.status(400).json({
           error: 'Invalid product data.',
@@ -605,10 +595,7 @@ router.patch(
         return;
       }
 
-      console.error(
-        'Edit product failed:',
-        error instanceof Error ? error.message : error,
-      );
+      console.error('Edit product failed:', error);
 
       res.status(500).json({
         error: 'Unable to update product.',
@@ -617,9 +604,8 @@ router.patch(
   },
 );
 
-
- // PATCH /api/products/:id/archive
- // Issue #12: Archive a product without deleting its history.
+// PATCH /api/products/:id/archive
+// Manager only. Products with remaining stock cannot be archived.
 router.patch(
   '/:id/archive',
   requireSession,
@@ -628,7 +614,6 @@ router.patch(
     const rawId = req.params.id;
     const id = typeof rawId === 'string' ? rawId : '';
 
-    // Validate the product ID.
     if (!UUID_PATTERN.test(id)) {
       res.status(400).json({
         error: 'Product id must be a valid UUID.',
@@ -637,7 +622,6 @@ router.patch(
     }
 
     try {
-      // Check whether the product exists.
       const productResult = await dbPool.query<
         Pick<ProductRow, 'product_id' | 'status'>
       >(
@@ -650,23 +634,15 @@ router.patch(
         [id],
       );
 
-      if (productResult.rowCount !== 1) {
+      const product = productResult.rows[0];
+
+      if (!product) {
         res.status(404).json({
           error: 'Product not found.',
         });
         return;
       }
 
-      const product = productResult.rows[0];
-
-      if (!product) {
-          res.status(404).json({
-          error: 'Product not found.',
-        });
-       return;
-      }
-
-      // Archiving an already archived product succeeds.
       if (product.status === 'archived') {
         res.status(200).json({
           message: 'Product is already archived.',
@@ -675,12 +651,6 @@ router.patch(
         return;
       }
 
-      /*
-       * IMPORTANT:
-       * This assumes BR-06 prevents archiving a product
-       * while positive stock remains in any location.
-       * Confirm this rule with your team.
-       */
       const inventoryResult = await dbPool.query<{
         has_stock: boolean;
       }>(
@@ -703,7 +673,6 @@ router.patch(
         return;
       }
 
-      // Archive the product without deleting its database row.
       const archiveResult = await dbPool.query<ProductRow>(
         `
           UPDATE public.products
@@ -733,7 +702,6 @@ router.patch(
         return;
       }
 
-      // Recheck if another request changed the product.
       const currentResult = await dbPool.query<
         Pick<ProductRow, 'product_id' | 'status'>
       >(
@@ -746,26 +714,19 @@ router.patch(
         [id],
       );
 
-      if (currentResult.rowCount !== 1) {
+      const currentProduct = currentResult.rows[0];
+
+      if (!currentProduct) {
         res.status(404).json({
           error: 'Product not found.',
         });
         return;
       }
 
-      const currentProduct = currentResult.rows[0];
-
-      if (!currentProduct) {
-         res.status(404).json({
-          error: 'Product not found.',
-      });
-      return;
-   }
-
       if (currentProduct.status === 'archived') {
         res.status(200).json({
           message: 'Product is already archived.',
-          product: currentResult.rows[0],
+          product: currentProduct,
         });
         return;
       }
@@ -773,15 +734,192 @@ router.patch(
       res.status(409).json({
         error:
           'Product could not be archived because its status changed.',
-        });
-      } catch (error) {
-        console.error(
-        'Archive product failed:',
-        error instanceof Error ? error.message : error,
-      );
+      });
+    } catch (error) {
+      console.error('Archive product failed:', error);
 
       res.status(500).json({
         error: 'Unable to archive product.',
+      });
+    }
+  },
+);
+
+// GET /api/products/:id
+router.get(
+  '/:id',
+  requireSession,
+  customRequireRole('Manager', 'Inventory Staff', 'Viewer'),
+  async (req, res): Promise<void> => {
+    const rawId = req.params.id;
+    const id = typeof rawId === 'string' ? rawId : '';
+
+    if (!UUID_PATTERN.test(id)) {
+      res.status(400).json({
+        error: 'Product id must be a valid UUID.',
+      });
+      return;
+    }
+
+    try {
+      const result = await dbPool.query<{
+        product: Record<string, unknown>;
+        total_on_hand: string;
+        last_received_at: string | null;
+        last_count_at: string | null;
+        locations: unknown[];
+        recent_movements: unknown[];
+      }>(
+        `
+          SELECT
+            jsonb_build_object(
+              'product_id', p.product_id,
+              'category_id', p.category_id,
+              'category_name', c.name,
+              'name', p.name,
+              'sku', p.sku,
+              'description', p.description,
+              'unit_of_measure', p.unit_of_measure,
+              'reorder_level', p.reorder_level::text,
+              'status', p.status,
+              'created_at', p.created_at,
+              'updated_at', p.updated_at
+            ) AS product,
+
+            COALESCE(
+              (
+                SELECT SUM(i.quantity)
+                FROM public.inventory i
+                WHERE i.product_id = p.product_id
+              ),
+              0
+            )::text AS total_on_hand,
+
+            (
+              SELECT MAX(sm.created_at)
+              FROM public.stock_movements sm
+              WHERE sm.product_id = p.product_id
+                AND sm.movement_type = 'RECEIPT'
+            ) AS last_received_at,
+
+            (
+              SELECT MAX(sm.created_at)
+              FROM public.stock_movements sm
+              WHERE sm.product_id = p.product_id
+                AND sm.movement_type = 'COUNT_VARIANCE'
+            ) AS last_count_at,
+
+            COALESCE(
+              (
+                SELECT jsonb_agg(
+                  jsonb_build_object(
+                    'location_id', l.location_id,
+                    'location_name', l.name,
+                    'location_code', l.code,
+                    'quantity', COALESCE(i.quantity, 0)::text
+                  )
+                  ORDER BY l.name
+                )
+                FROM public.locations l
+                LEFT JOIN public.inventory i
+                  ON i.location_id = l.location_id
+                  AND i.product_id = p.product_id
+                WHERE l.status = 'active'
+              ),
+              '[]'::jsonb
+            ) AS locations,
+
+            COALESCE(
+              (
+                SELECT jsonb_agg(
+                  jsonb_build_object(
+                    'movement_id', movement_data.movement_id,
+                    'movement_no', movement_data.movement_no,
+                    'movement_type', movement_data.movement_type,
+                    'quantity_change', movement_data.quantity_change,
+                    'quantity_before', movement_data.quantity_before,
+                    'quantity_after', movement_data.quantity_after,
+                    'reference_no', movement_data.reference_no,
+                    'reason', movement_data.reason,
+                    'notes', movement_data.notes,
+                    'created_at', movement_data.created_at,
+                    'location_name', movement_data.location_name,
+                    'user_name', movement_data.user_name
+                  )
+                  ORDER BY
+                    movement_data.created_at DESC,
+                    movement_data.movement_id DESC
+                )
+                FROM (
+                  SELECT
+                    sm.movement_id,
+                    sm.movement_no,
+                    sm.movement_type,
+                    sm.quantity_change::text AS quantity_change,
+                    sm.quantity_before::text AS quantity_before,
+                    sm.quantity_after::text AS quantity_after,
+                    sm.reference_no,
+                    COALESCE(rc.label, sm.reason) AS reason,
+                    sm.notes,
+                    sm.created_at,
+                    l.name AS location_name,
+                    COALESCE(
+                      NULLIF(
+                        TRIM(CONCAT(u.first_name, ' ', u.last_name)),
+                        ''
+                      ),
+                      u.email
+                    ) AS user_name
+                  FROM public.stock_movements sm
+                  LEFT JOIN public.locations l
+                    ON l.location_id = sm.location_id
+                  LEFT JOIN public.users u
+                    ON u.user_id = sm.user_id
+                  LEFT JOIN public.reason_codes rc
+                    ON rc.reason_code_id = sm.reason_code_id
+                  WHERE sm.product_id = p.product_id
+                  ORDER BY
+                    sm.created_at DESC,
+                    sm.movement_id DESC
+                  LIMIT 10
+                ) AS movement_data
+              ),
+              '[]'::jsonb
+            ) AS recent_movements
+
+          FROM public.products p
+          LEFT JOIN public.categories c
+            ON c.category_id = p.category_id
+          WHERE p.product_id = $1
+          LIMIT 1
+        `,
+        [id],
+      );
+
+      const row = result.rows[0];
+
+      if (!row) {
+        res.status(404).json({
+          error: 'Product not found.',
+        });
+        return;
+      }
+
+      res.status(200).json({
+        product: row.product,
+        summary: {
+          total_on_hand: row.total_on_hand,
+          last_received_at: row.last_received_at,
+          last_count_at: row.last_count_at,
+        },
+        locations: row.locations,
+        recent_movements: row.recent_movements,
+      });
+    } catch (error) {
+      console.error('Get product details failed:', error);
+
+      res.status(500).json({
+        error: 'Unable to retrieve product details.',
       });
     }
   },
@@ -802,7 +940,6 @@ router.get(
       'pageSize',
     ]);
 
-    // Reject unexpected query parameters and repeated values.
     for (const [key, value] of Object.entries(req.query)) {
       if (!allowedQueryFields.has(key)) {
         res.status(400).json({
@@ -821,7 +958,6 @@ router.get(
 
     const query = req.query as Record<string, string>;
 
-    // Pagination defaults and validation.
     const pageText = query.page ?? '1';
     const pageSizeText = query.pageSize ?? '20';
 
@@ -844,8 +980,7 @@ router.get(
       pageSize > 100
     ) {
       res.status(400).json({
-        error:
-          'Invalid pagination. pageSize must not exceed 100.',
+        error: 'Invalid pagination. pageSize must not exceed 100.',
       });
       return;
     }
@@ -859,7 +994,6 @@ router.get(
       return;
     }
 
-    // Validate optional search.
     let search: string | null = null;
 
     if (query.search !== undefined) {
@@ -877,7 +1011,6 @@ router.get(
       }
     }
 
-    // Validate category UUID.
     let categoryId: string | null = null;
 
     if (query.category_id !== undefined) {
@@ -891,7 +1024,6 @@ router.get(
       }
     }
 
-    // Validate status.
     const status = query.status;
 
     if (
@@ -905,7 +1037,6 @@ router.get(
       return;
     }
 
-    // Strict boolean parsing.
     const archivedText = query.includeArchived ?? 'false';
 
     if (
@@ -920,13 +1051,9 @@ router.get(
 
     const includeArchived = archivedText === 'true';
 
-    // An explicit archived status is considered an
-    // intentional request to include archived products.
     const showArchived =
       includeArchived || status === 'archived';
 
-    // Parameterized filtering shared by both count
-    // and page queries.
     const conditions: string[] = [];
     const values: unknown[] = [];
 
@@ -941,11 +1068,7 @@ router.get(
       );
     }
 
-
     if (search !== null) {
-      // Treat search input as literal text.
-      // Search both product name and SKU,
-      // ignoring case.
       values.push(search);
 
       const searchParameter = `$${values.length}`;
@@ -960,10 +1083,7 @@ router.get(
     }
 
     if (categoryId !== null) {
-      addCondition(
-        'p.category_id = $VALUE',
-        categoryId,
-      );
+      addCondition('p.category_id = $VALUE', categoryId);
     }
 
     if (status !== undefined) {
@@ -972,15 +1092,12 @@ router.get(
       conditions.push("p.status = 'active'");
     }
 
-    const whereClause = conditions.length > 0
-      ? `WHERE ${conditions.join(' AND ')}`
-      : '';
+    const whereClause =
+      conditions.length > 0
+        ? `WHERE ${conditions.join(' AND ')}`
+        : '';
 
     try {
-      // One statement ensures the count and returned
-      // page are based on the same database snapshot.
-      // Separate page and count CTEs also preserve the
-      // total when the requested page has no rows.
       const result = await dbPool.query<{
         total: string;
         items: ProductRow[];
@@ -1040,12 +1157,7 @@ router.get(
         pageSize,
       });
     } catch (error) {
-      console.error(
-        'List products failed:',
-        error instanceof Error
-          ? error.message
-          : error,
-      );
+      console.error('List products failed:', error);
 
       res.status(500).json({
         error: 'Unable to retrieve products.',
@@ -1053,6 +1165,5 @@ router.get(
     }
   },
 );
-
 
 export default router;

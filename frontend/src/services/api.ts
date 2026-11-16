@@ -17,6 +17,53 @@ export interface ProductOption {
   sku: string;
 }
 
+export interface ProductDetail {
+  product_id: string;
+  category_id: string;
+  category_name: string | null;
+  name: string;
+  sku: string;
+  description: string | null;
+  unit_of_measure: string;
+  reorder_level: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductLocationStock {
+  location_id: string;
+  location_name: string;
+  location_code: string;
+  quantity: string;
+}
+
+export interface ProductRecentMovement {
+  movement_id: string;
+  movement_no: string | null;
+  movement_type: string;
+  quantity_change: string;
+  quantity_before: string;
+  quantity_after: string;
+  reference_no: string | null;
+  reason: string | null;
+  notes: string | null;
+  created_at: string;
+  location_name: string | null;
+  user_name: string | null;
+}
+
+export interface ProductDetailResponse {
+  product: ProductDetail;
+  summary: {
+    total_on_hand: string;
+    last_received_at: string | null;
+    last_count_at: string | null;
+  };
+  locations: ProductLocationStock[];
+  recent_movements: ProductRecentMovement[];
+}
+
 export interface LocationOption {
   location_id: string;
   name: string;
@@ -55,7 +102,11 @@ export interface StockMovementResult {
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  );
 }
 
 async function request(
@@ -103,6 +154,83 @@ export async function getProducts(): Promise<ProductOption[]> {
   }
 
   return data.items as ProductOption[];
+}
+
+// F03: Retrieve one product and its stock across all active locations.
+export async function getProductDetails(
+  productId: string,
+): Promise<ProductDetailResponse> {
+  if (!productId.trim()) {
+    throw new Error("A product ID is required.");
+  }
+
+  const data = await request(
+    `/products/${encodeURIComponent(productId)}`,
+  );
+
+  if (
+    !isObject(data) ||
+    !isObject(data.product) ||
+    !isObject(data.summary) ||
+    !Array.isArray(data.locations) ||
+    !Array.isArray(data.recent_movements)
+  ) {
+    throw new Error(
+      "The server returned an unexpected product details response.",
+    );
+  }
+
+  const product = data.product;
+  const summary = data.summary;
+
+  if (
+    typeof product.product_id !== "string" ||
+    typeof product.category_id !== "string" ||
+    typeof product.name !== "string" ||
+    typeof product.sku !== "string" ||
+    typeof product.unit_of_measure !== "string" ||
+    typeof product.reorder_level !== "string" ||
+    typeof product.status !== "string" ||
+    typeof summary.total_on_hand !== "string"
+  ) {
+    throw new Error(
+      "The server returned incomplete product details.",
+    );
+  }
+
+  const validLocations = data.locations.every(
+    (location) =>
+      isObject(location) &&
+      typeof location.location_id === "string" &&
+      typeof location.location_name === "string" &&
+      typeof location.location_code === "string" &&
+      typeof location.quantity === "string",
+  );
+
+  if (!validLocations) {
+    throw new Error(
+      "The server returned invalid product location data.",
+    );
+  }
+
+  const validMovements = data.recent_movements.every(
+    (movement) =>
+      isObject(movement) &&
+      typeof movement.movement_id === "string" &&
+      typeof movement.movement_type === "string" &&
+      typeof movement.quantity_change === "string" &&
+      typeof movement.quantity_before === "string" &&
+      typeof movement.quantity_after === "string" &&
+      typeof movement.created_at === "string",
+  );
+
+  if (!validMovements) {
+    throw new Error(
+      "The server returned invalid product movement history.",
+    );
+  }
+
+  return data as unknown as ProductDetailResponse;
 }
 
 export async function getLocations(): Promise<LocationOption[]> {
