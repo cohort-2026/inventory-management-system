@@ -10,7 +10,7 @@ import { useAuth } from "../utils/AuthContext";
 
 type RecordObject = Record<string, unknown>;
 type InventoryRow = {
-  inventory_id: string;
+  inventory_id: string | null;
   product_id: string;
   name: string;
   sku: string;
@@ -62,7 +62,7 @@ async function getJson(path: string, signal: AbortSignal): Promise<unknown> {
 }
 
 function parseInventoryRow(value: unknown): InventoryRow {
-  if (!isObject(value) || typeof value.inventory_id !== "string" || typeof value.product_id !== "string" ||
+  if (!isObject(value) || (value.inventory_id !== null && typeof value.inventory_id !== "string") || typeof value.product_id !== "string" ||
       typeof value.name !== "string" || typeof value.sku !== "string" || typeof value.location_name !== "string" ||
       !["LOW_STOCK", "OUT_OF_STOCK", "IN_STOCK"].includes(String(value.stock_status))) {
     throw new Error("The inventory API returned an unexpected record.");
@@ -214,7 +214,7 @@ export default function Dashboard() {
       />
 
       <div className="stat-grid" aria-busy={loading}>
-        <StatCard label="Stocked products" value={inventory ? formatQuantity(inventory.stockedProducts) : "—"} />
+        <StatCard label="Active products" value={inventory ? formatQuantity(inventory.stockedProducts) : "—"} />
         <StatCard label="Total stock units" value={inventory ? formatQuantity(inventory.totalUnits) : "—"} />
         <StatCard label="Low-stock entries" value={inventory ? formatQuantity(inventory.lowStock) : "—"} />
         <StatCard label="Out-of-stock entries" value={inventory ? formatQuantity(inventory.outOfStock) : "—"} />
@@ -246,7 +246,7 @@ export default function Dashboard() {
                 { header: "Status", render: (row: InventoryRow) => <Badge status={row.stock_status === "OUT_OF_STOCK" ? "out" : "low"}>{row.stock_status === "OUT_OF_STOCK" ? "OUT OF STOCK" : "LOW STOCK"}</Badge> },
               ]}
               rows={inventory.attention}
-              keyField={(row: InventoryRow) => row.inventory_id}
+              keyField={(row: InventoryRow) => `${row.product_id}:${row.location_name}`}
             />
           </div>
         )}

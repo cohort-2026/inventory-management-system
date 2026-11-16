@@ -113,13 +113,6 @@ export async function getStockMovementDetail(req: Request, res: Response): Promi
   try {
     const id = req.params.id;
 
-    console.log('[F02 DEBUG] Movement detail request:', {
-      id,
-      type: typeof id,
-      params: req.params,
-      originalUrl: req.originalUrl,
-    });
-
     if (typeof id !== 'string' || !UUID.test(id)) {
       throw new InputError('Invalid movement ID.');
     }

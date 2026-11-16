@@ -1,117 +1,207 @@
 import type { Request, Response } from 'express';
 import { dbPool } from '../db/pool';
-import {
-  calculateInventoryStatus,
-  STOCK_STATUS_LABELS,
-} from '../services/inventoryStatus';
+import { calculateInventoryStatus, STOCK_STATUS_LABELS } from '../services/inventoryStatus';
 
+type Status = 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK';
+type Filters = {
+  search: string;
+  location: string;
+  category: string;
+  status: Status | '';
+  selected: string[];
+};
 type InventoryRow = {
-  inventory_id: string;
+  inventory_id: string | null;
   product_id: string;
   location_id: string;
   name: string;
   sku: string;
   category_id: string;
+  category_name: string;
   location_name: string;
   location_code: string;
-  quantity: string | null; // PostgreSQL NUMERIC is returned as text by pg.
-  reorder_level: string | null;
-  updated_at: Date;
+  quantity: string;
+  reorder_level: string;
+  updated_at: Date | null;
+  last_movement_at: Date | null;
 };
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_EXPORT = 10_000;
 
-function parsePositiveInteger(value: unknown, fallback: number, max: number): number | null {
+function one(req: Request, key: string): string | undefined {
+  const value = req.query[key];
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string') throw new Error(`${key} must be a single string.`);
+  return value;
+}
+function positive(value: string | undefined, fallback: number, max: number, name: string): number {
   if (value === undefined) return fallback;
-  if (typeof value !== 'string' || !/^[1-9]\d*$/.test(value)) return null;
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed <= max ? parsed : null;
+  if (!/^[1-9]\d*$/.test(value)) throw new Error(`${name} must be a positive integer.`);
+  const n = Number(value);
+  if (!Number.isSafeInteger(n) || n > max) throw new Error(`${name} must be at most ${max}.`);
+  return n;
+}
+function parseFilters(req: Request, allowSelected = false): Filters {
+  const keys = new Set(['search', 'location', 'category', 'status', 'page', 'pageSize']);
+  if (allowSelected) keys.add('selected');
+  for (const key of Object.keys(req.query)) {
+    if (!keys.has(key)) throw new Error(`Unknown query parameter: ${key}.`);
+  }
+  const search = (one(req, 'search') ?? '').trim();
+  const location = one(req, 'location') ?? '';
+  const category = one(req, 'category') ?? '';
+  const status = (one(req, 'status') ?? '') as Status | '';
+  if (search.length > 200) throw new Error('search cannot exceed 200 characters.');
+  if (location && !UUID.test(location)) throw new Error('Invalid location ID.');
+  if (category && !UUID.test(category)) throw new Error('Invalid category ID.');
+  if (status && !['IN_STOCK', 'LOW_STOCK', 'OUT_OF_STOCK'].includes(status)) {
+    throw new Error('Invalid stock status.');
+  }
+  const rawSelected = one(req, 'selected') ?? '';
+  const selected = rawSelected ? rawSelected.split(',') : [];
+  if (selected.length > 100) throw new Error('Select at most 100 product/location rows.');
+  if (selected.some((item) => !new RegExp(`^${UUID.source.slice(1, -1)}:${UUID.source.slice(1, -1)}$`, 'i').test(item))) {
+    throw new Error('selected must contain productId:locationId pairs.');
+  }
+  return { search, location, category, status, selected };
 }
 
-// GET /api/inventory — one item for each existing product/location inventory record.
+// The product/location cross join is the source of truth. An absent inventory row represents zero,
+// not an invented database ID. No stock writes or migrations are involved.
+const BASE = `
+FROM public.products p
+CROSS JOIN public.locations l
+LEFT JOIN public.inventory i ON i.product_id = p.product_id AND i.location_id = l.location_id
+LEFT JOIN public.categories c ON c.category_id = p.category_id
+WHERE p.status = 'active' AND l.status = 'active'`;
+function where(f: Filters): { sql: string; values: unknown[] } {
+  const values: unknown[] = [f.search, f.location || null, f.category || null, f.status || null];
+  let sql = `${BASE}
+  AND ($1::text = '' OR STRPOS(LOWER(p.name), LOWER($1::text)) > 0
+    OR STRPOS(LOWER(p.sku), LOWER($1::text)) > 0)
+  AND ($2::uuid IS NULL OR l.location_id = $2::uuid)
+  AND ($3::uuid IS NULL OR p.category_id = $3::uuid)
+  AND ($4::text IS NULL OR
+    CASE WHEN COALESCE(i.quantity, 0) = 0 THEN 'OUT_OF_STOCK'
+         WHEN COALESCE(i.quantity, 0) < p.reorder_level THEN 'LOW_STOCK'
+         ELSE 'IN_STOCK' END = $4::text)`;
+  if (f.selected.length) {
+    values.push(f.selected.map((item) => item.toLowerCase()));
+    sql += ` AND (p.product_id::text || ':' || l.location_id::text) = ANY($5::text[])`;
+  }
+  return { sql, values };
+}
+function shape(row: InventoryRow) {
+  const stockStatus = calculateInventoryStatus(row.quantity, row.reorder_level);
+  return {
+    id: `${row.product_id}:${row.location_id}`,
+    inventory_id: row.inventory_id,
+    product_id: row.product_id,
+    location_id: row.location_id,
+    name: row.name,
+    sku: row.sku,
+    category_id: row.category_id,
+    category_name: row.category_name,
+    location_name: row.location_name,
+    location_code: row.location_code,
+    quantity: row.quantity,
+    reorder_level: row.reorder_level,
+    stock_status: stockStatus,
+    status: STOCK_STATUS_LABELS[stockStatus],
+    updated_at: row.updated_at,
+    last_movement_at: row.last_movement_at,
+  };
+}
+const FIELDS = `
+ SELECT i.inventory_id, p.product_id, l.location_id, p.name, p.sku,
+ p.category_id, COALESCE(c.name, 'Uncategorised') AS category_name,
+ l.name AS location_name, l.code AS location_code,
+ COALESCE(i.quantity, 0)::text AS quantity,
+ p.reorder_level::text AS reorder_level,
+ i.updated_at,
+ (SELECT sm.created_at FROM public.stock_movements sm
+  WHERE sm.product_id = p.product_id AND sm.location_id = l.location_id
+  ORDER BY sm.created_at DESC, sm.movement_id DESC LIMIT 1) AS last_movement_at`;
+const ORDER = 'ORDER BY p.name ASC, p.sku ASC, l.name ASC, p.product_id ASC, l.location_id ASC';
+function badRequest(res: Response, error: unknown): void {
+  res.status(400).json({ error: error instanceof Error ? error.message : 'Invalid request.' });
+}
+
 export async function getInventory(req: Request, res: Response): Promise<void> {
-  const rawSearch = req.query.search;
-  if (rawSearch !== undefined && typeof rawSearch !== 'string') {
-    res.status(400).json({ error: 'search must be a single string.' });
-    return;
-  }
-
-  const search = (rawSearch ?? '').trim();
-  if (search.length > 200) {
-    res.status(400).json({ error: 'search cannot exceed 200 characters.' });
-    return;
-  }
-
-  const page = parsePositiveInteger(req.query.page, 1, 1_000_000);
-  const pageSize = parsePositiveInteger(req.query.pageSize, 10, 100);
-  if (page === null || pageSize === null) {
-    res.status(400).json({ error: 'page must be a positive integer and pageSize must be between 1 and 100.' });
-    return;
-  }
-
-  const offset = (page - 1) * pageSize;
-
+  let f: Filters, page: number, pageSize: number;
   try {
-    // Search is deliberately limited to product name, per the list API issue.
-    const condition = `($1::text = '' OR STRPOS(LOWER(p.name), LOWER($1::text)) > 0)`;
-    const countResult = await dbPool.query<{ total: string }>(
-      `SELECT COUNT(*)::text AS total
-       FROM public.inventory AS i
-       JOIN public.products AS p ON p.product_id = i.product_id
-       JOIN public.locations AS l ON l.location_id = i.location_id
-       WHERE ${condition}`,
-      [search],
+    f = parseFilters(req);
+    page = positive(one(req, 'page'), 1, 1_000_000, 'page');
+    pageSize = positive(one(req, 'pageSize'), 50, 100, 'pageSize');
+  } catch (error) { badRequest(res, error); return; }
+  const q = where(f);
+  try {
+    const count = await dbPool.query<{ total: string }>(`SELECT COUNT(*)::text AS total ${q.sql}`, q.values);
+    const rows = await dbPool.query<InventoryRow>(
+      `${FIELDS} ${q.sql} ${ORDER} LIMIT $${q.values.length + 1} OFFSET $${q.values.length + 2}`,
+      [...q.values, pageSize, (page - 1) * pageSize],
     );
-
-    const rowsResult = await dbPool.query<InventoryRow>(
-      `SELECT
-         i.inventory_id,
-         i.product_id,
-         i.location_id,
-         p.name,
-         p.sku,
-         p.category_id,
-         l.name AS location_name,
-         l.code AS location_code,
-         i.quantity::text AS quantity,
-         p.reorder_level::text AS reorder_level,
-         i.updated_at
-       FROM public.inventory AS i
-       JOIN public.products AS p ON p.product_id = i.product_id
-       JOIN public.locations AS l ON l.location_id = i.location_id
-       WHERE ${condition}
-       ORDER BY p.name ASC, l.name ASC, i.inventory_id ASC
-       LIMIT $2 OFFSET $3`,
-      [search, pageSize, offset],
-    );
-
-    const items = rowsResult.rows.map((row) => {
-      const stockStatus = calculateInventoryStatus(row.quantity, row.reorder_level);
-      return {
-        id: row.inventory_id,
-        inventory_id: row.inventory_id,
-        product_id: row.product_id,
-        location_id: row.location_id,
-        name: row.name,
-        sku: row.sku,
-        category_id: row.category_id,
-        location_name: row.location_name,
-        location_code: row.location_code,
-        quantity: row.quantity,
-        reorder_level: row.reorder_level,
-        stock_status: stockStatus,
-        status: STOCK_STATUS_LABELS[stockStatus],
-        updated_at: row.updated_at,
-      };
-    });
-
-    res.status(200).json({
-      items,
-      page,
-      pageSize,
-      total: Number(countResult.rows[0]?.total ?? '0'),
-    });
+    res.json({ items: rows.rows.map(shape), page, pageSize, total: Number(count.rows[0]?.total ?? 0) });
   } catch (error) {
-    // Invalid stored data is a server-side data-integrity failure; do not disguise it as zero.
     console.error('Get inventory failed:', error);
-    res.status(500).json({ error: 'Unable to retrieve valid inventory data.' });
+    res.status(500).json({ error: 'Unable to retrieve inventory.' });
+  }
+}
+
+// Summary ignores the selected status, but retains location/category/search; counts drive status tabs.
+export async function getInventorySummary(req: Request, res: Response): Promise<void> {
+  let f: Filters;
+  try { f = parseFilters(req); } catch (error) { badRequest(res, error); return; }
+  const q = where({ ...f, status: '' });
+  try {
+    const result = await dbPool.query<{
+      total: string; in_stock: string; low_stock: string; out_of_stock: string;
+    }>(`SELECT COUNT(*)::text AS total,
+        COUNT(*) FILTER (WHERE COALESCE(i.quantity, 0) > 0 AND COALESCE(i.quantity, 0) >= p.reorder_level)::text AS in_stock,
+        COUNT(*) FILTER (WHERE COALESCE(i.quantity, 0) > 0 AND COALESCE(i.quantity, 0) < p.reorder_level)::text AS low_stock,
+        COUNT(*) FILTER (WHERE COALESCE(i.quantity, 0) = 0)::text AS out_of_stock
+        ${q.sql}`, q.values);
+    const row = result.rows[0];
+    res.json({ total: Number(row?.total ?? 0), in_stock: Number(row?.in_stock ?? 0),
+      low_stock: Number(row?.low_stock ?? 0), out_of_stock: Number(row?.out_of_stock ?? 0) });
+  } catch (error) {
+    console.error('Inventory summary failed:', error);
+    res.status(500).json({ error: 'Unable to retrieve inventory summary.' });
+  }
+}
+
+function csvCell(value: unknown): string {
+  const text = value == null ? '' : String(value);
+  // Neutralise spreadsheet formula injection, including whitespace-prefixed formulas.
+  const safe = /^[\s\u0000-\u001f]*[=+@-]/.test(text) ? `'${text}` : text;
+  return `"${safe.replace(/"/g, '""')}"`;
+}
+export async function exportInventoryCsv(req: Request, res: Response): Promise<void> {
+  let f: Filters;
+  try { f = parseFilters(req, true); } catch (error) { badRequest(res, error); return; }
+  const q = where(f);
+  try {
+    const rows = await dbPool.query<InventoryRow>(
+      `${FIELDS} ${q.sql} ${ORDER} LIMIT ${MAX_EXPORT + 1}`, q.values,
+    );
+    if (rows.rows.length > MAX_EXPORT) {
+      res.status(409).json({ error: 'More than 10,000 records match. Narrow the filters before exporting.' });
+      return;
+    }
+    const lines = [
+      ['Product', 'SKU', 'Category', 'Location', 'Location code', 'On hand', 'Minimum', 'Status', 'Last movement'].map(csvCell).join(','),
+      ...rows.rows.map((row) => {
+        const value = shape(row);
+        return [value.name, value.sku, value.category_name, value.location_name, value.location_code,
+          value.quantity, value.reorder_level, value.status, value.last_movement_at?.toISOString() ?? ''].map(csvCell).join(',');
+      }),
+    ];
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="stock-on-hand.csv"');
+    res.setHeader('Cache-Control', 'no-store');
+    res.status(200).send('\uFEFF' + lines.join('\r\n') + '\r\n');
+  } catch (error) {
+    console.error('Inventory CSV failed:', error);
+    res.status(500).json({ error: 'Unable to export inventory.' });
   }
 }
