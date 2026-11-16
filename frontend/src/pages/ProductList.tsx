@@ -55,7 +55,7 @@ export default function ProductList() {
   const [error, setError] = useState('');
 
   const [selectedProduct, setSelectedProduct] =
-  useState<EditableProduct | null>(null);
+    useState<EditableProduct | null>(null);
 
   const [categories, setCategories] =
     useState<ProductCategory[]>([]);
@@ -243,6 +243,14 @@ export default function ProductList() {
     setPage(1);
   }
 
+  function getCategoryName(categoryId: string): string {
+    const category = categories.find(
+      (item) => item.category_id === categoryId,
+    );
+
+    return category?.name || 'Uncategorised';
+  }
+
   return (
     <AppLayout>
       <PageHeader
@@ -301,15 +309,9 @@ export default function ProductList() {
               setPage(1);
             }}
           >
-            <option value="active">
-              Active
-            </option>
-            <option value="archived">
-              Archived
-            </option>
-            <option value="all">
-              All statuses
-            </option>
+            <option value="active">Active</option>
+            <option value="archived">Archived</option>
+            <option value="all">All statuses</option>
           </select>
         </div>
 
@@ -336,6 +338,16 @@ export default function ProductList() {
         </p>
       )}
 
+      {!loading && categoriesError && (
+        <p
+          className="field-error"
+          role="status"
+        >
+          Category names could not be loaded. Some products may show as
+          Uncategorised.
+        </p>
+      )}
+
       {loading ? (
         <div
           className="card card-body"
@@ -346,16 +358,19 @@ export default function ProductList() {
         </div>
       ) : !error ? (
         <>
-        <p className="table-note">
-          Categories loading: {String(categoriesLoading)} |
-          Categories loaded: {categories.length} |
-          Categories error: {categoriesError || 'None'}
-        </p>
           <DataTable
             columns={[
               {
                 header: 'Product',
-                render: (product) => product.name,
+                render: (product) => (
+                  <Link
+                    to={`/products/${encodeURIComponent(
+                      product.product_id,
+                    )}`}
+                  >
+                    {product.name}
+                  </Link>
+                ),
               },
               {
                 header: 'SKU',
@@ -363,10 +378,9 @@ export default function ProductList() {
                 mono: true,
               },
               {
-                header: 'Category ID',
+                header: 'Category',
                 render: (product) =>
-                  product.category_id,
-                mono: true,
+                  getCategoryName(product.category_id),
               },
               {
                 header: 'Unit',
@@ -389,17 +403,33 @@ export default function ProductList() {
               {
                 header: 'Actions',
                 render: (product) => (
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => setSelectedProduct(product)}
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: '8px',
+                      flexWrap: 'wrap',
+                    }}
                   >
-                    Edit
-                  </button>
-                )
+                    <Link
+                      to={`/products/${encodeURIComponent(
+                        product.product_id,
+                      )}`}
+                      className="btn btn-primary btn-sm"
+                    >
+                      View Details
+                    </Link>
+
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => setSelectedProduct(product)}
+                    >
+                      Edit
+                    </button>
+                  </div>
+                ),
               },
-            ]
-          }
+            ]}
             rows={products}
             keyField={(product) =>
               product.product_id
@@ -427,6 +457,7 @@ export default function ProductList() {
           />
         </>
       ) : null}
+
       {selectedProduct && (
         <EditProductModal
           key={selectedProduct.product_id}
