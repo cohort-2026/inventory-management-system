@@ -125,3 +125,375 @@ table {
     transition-duration: 0.001ms !important;
   }
 }
+
+
+/* =========================================
+   UI EXPERIMENT 01 — APP SHELL
+   ========================================= */
+
+/* Application layout */
+
+.app-shell {
+  min-height: 100vh;
+  background: #f7f9fc;
+}
+
+.app-sidebar {
+  width: 248px;
+  flex-shrink: 0;
+  background: #ffffff;
+  color: #64748b;
+  padding: 28px 16px;
+  border-right: 1px solid #e8edf3;
+}
+
+.sidebar-brand {
+  font-size: 17px;
+  font-weight: 700;
+  color: #1e293b;
+  padding: 8px 12px 32px;
+  gap: 11px;
+}
+
+.sidebar-brand-mark {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: #3976b9;
+}
+
+/* Navigation */
+
+.sidebar-nav li + li {
+  margin-top: 5px;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 13px;
+  border-radius: 8px;
+  border-left: none;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.sidebar-link:hover {
+  background: #f1f5f9;
+  color: #315f91;
+  text-decoration: none;
+}
+
+.sidebar-link.active {
+  background: #eaf2fb;
+  color: #315f91;
+  border-left: none;
+  font-weight: 600;
+}
+
+/* Main content */
+
+.app-main {
+  background: #f7f9fc;
+  min-width: 0;
+}
+
+.app-content {
+  padding: 32px;
+}
+
+/* Top navigation */
+
+.app-topbar {
+  min-height: 68px;
+  padding: 12px 32px;
+  background: #ffffff;
+  border-bottom: 1px solid #e8edf3;
+}
+
+/* Search */
+
+.search-input {
+  background: #f7f9fc;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  padding: 10px 14px;
+  max-width: 380px;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.search-input:focus-within {
+  border-color: #6b9acb;
+  box-shadow: 0 0 0 3px rgba(57, 118, 185, 0.10);
+}
+
+/* User menu */
+
+.user-menu-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #ffffff;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 13px;
+  color: #334155;
+  cursor: pointer;
+}
+
+.user-menu-trigger:hover {
+  background: #f7f9fc;
+  border-color: #e2e8f0;
+}
+
+.user-menu-caret {
+  color: #94a3b8;
+}
+
+.user-menu-panel {
+  border-radius: 10px;
+  border-color: #e2e8f0;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  min-width: 180px;
+  padding: 8px;
+  z-index: 50;
+}
+
+/* Responsive adjustments */
+
+@media (max-width: 860px) {
+  .app-sidebar {
+    width: 200px;
+  }
+
+  .app-content {
+    padding: 24px;
+  }
+
+  .app-topbar {
+    padding: 12px 24px;
+  }
+}
+
+@media (max-width: 600px) {
+  .app-sidebar {
+    width: 150px;
+  }
+
+  .app-content {
+    padding: 16px;
+  }
+
+  .app-topbar {
+    padding: 10px 12px;
+  }
+}
+
+
+/* =========================================
+   UI EXPERIMENT 02 — NAVIGATION
+   ========================================= */
+
+/* Sidebar brand icon */
+
+.sidebar-brand-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  background: #eaf2fb;
+  color: #315f91;
+}
+
+/* Sidebar section label */
+
+.sidebar-section-label {
+  padding: 0 12px;
+  margin-bottom: 12px;
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.1px;
+}
+
+/* Navigation icons */
+
+.sidebar-link svg {
+  flex-shrink: 0;
+  color: #94a3b8;
+  transition: color 150ms ease;
+}
+
+.sidebar-link:hover svg,
+.sidebar-link.active svg {
+  color: #315f91;
+}
+
+/* Navigation text */
+
+.sidebar-link span {
+  white-space: nowrap;
+}
+
+/* Account avatar */
+
+.user-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #eaf2fb;
+  color: #315f91;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.user-menu-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.user-menu-chevron {
+  color: #94a3b8;
+  transition: transform 150ms ease;
+}
+
+.user-menu-chevron.open {
+  transform: rotate(180deg);
+}
+
+/* Dropdown content */
+
+.user-menu-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+}
+
+.user-menu-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: #94a3b8;
+}
+
+.user-menu-username {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  overflow-wrap: anywhere;
+}
+
+.user-menu-divider {
+  height: 1px;
+  background: #e8edf3;
+  margin: 5px 0;
+}
+
+/* Logout action */
+
+.logout-button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.logout-button:hover {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+/* Search icon */
+
+.search-input svg {
+  color: #94a3b8;
+}
+
+/* =========================================
+   SIDEBAR — ALIGNMENT REFINEMENT
+   ========================================= */
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 42px;
+  padding: 4px 12px;
+  margin-bottom: 30px;
+  line-height: 1;
+}
+
+.sidebar-brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  margin: 0;
+  padding: 0;
+}
+
+.sidebar-brand-mark svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.sidebar-nav li {
+  margin: 0;
+  padding: 0;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 42px;
+  padding: 0 13px;
+  line-height: 1.2;
+  box-sizing: border-box;
+}
+
+.sidebar-link svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  margin: 0;
+}
+
+.sidebar-link span {
+  display: block;
+  line-height: 1.2;
+  margin: 0;
+}
