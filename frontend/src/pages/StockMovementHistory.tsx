@@ -1,241 +1,243 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import AppLayout from "../components/AppLayout";
-import PageHeader from "../components/PageHeader";
-import { getLocations, getProducts, type LocationOption, type ProductOption } from "../services/api";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import AppLayout from '../components/AppLayout';
+import PageHeader from '../components/PageHeader';
+import { getProducts, getLocations, type ProductOption, type LocationOption } from '../services/api';
 
+type Entity = { location_id: string; name: string; code: string };
 type Movement = {
-  movement_id: string;
-  movement_type: string;
+  movement_id: string; movement_no: string; movement_type: string;
   product: { product_id: string; name: string; sku: string };
-  location: { location_id: string; name: string; code: string };
-  second_location: { location_id: string; name: string; code: string } | null;
-  quantity_change: string;
+  location: Entity; second_location: Entity | null; paired_movement_id: string | null;
+  quantity_change: string; quantity_before: string; quantity_after: string;
   user: { user_id: string; name: string; email: string };
-  created_at: string;
-  reason: string | null;
-  notes: string | null;
+  created_at: string; reason: string | null; reason_code: string | null; notes: string | null;
+  reference_id: string | null; reference_no: string | null; reverses_movement_id: string | null;
 };
-type MovementPage = { items: Movement[]; total: number; page: number; pageSize: number };
-type Filters = { productId: string; locationId: string; movementType: string; from: string; to: string };
-const DEFAULT_FILTERS: Filters = { productId: "", locationId: "", movementType: "", from: "", to: "" };
-const PAGE_SIZES = [10, 20, 50, 100] as const;
-const MOVEMENT_TYPES = [
-  { value: "ADJUSTMENT", label: "Adjustment" },
-  { value: "TRANSFER_OUT", label: "Transfer out" },
-  { value: "TRANSFER_IN", label: "Transfer in" },
-  { value: "COUNT", label: "Stock count" },
-  { value: "IN", label: "Stock received" },
-  { value: "OUT", label: "Stock issued" },
+type Page = { items: Movement[]; total: number; page: number; pageSize: number };
+type Detail = { movement: Movement; linked: Movement[] };
+type Filters = { product_id: string; location_id: string; user_id: string; movement_type: string[]; from: string; to: string };
+const TYPE_OPTIONS = [
+  ['RECEIPT', 'Receipt'], ['SALE', 'Sale'], ['CUSTOMER_RETURN', 'Return'],
+  ['WRITE_OFF', 'Write-off'], ['ADJUSTMENT', 'Adjustment'],
+  ['TRANSFER_OUT', 'Transfer out'], ['TRANSFER_IN', 'Transfer in'],
+  ['COUNT_VARIANCE', 'Count variance'], ['COUNT', 'Legacy count'],
+  ['IN', 'Legacy receipt'], ['OUT', 'Legacy issue'],
 ] as const;
-const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://localhost:5000").replace(/\/$/, "");
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
+const URL = `${(import.meta.env.VITE_API_URL ?? 'http://localhost:5000').replace(/\/$/, '')}/api/stock-movements`;
+const types = new Map<string, string>(TYPE_OPTIONS);
+const typeLabel = (t: string) => types.get(t) ?? t.replace(/_/g, ' ').toLowerCase();
+const field: CSSProperties = { display: 'flex', flexDirection: 'column', gap: '0.35rem', minWidth: 0 };
+const control: CSSProperties = { width: '100%', minWidth: 0 };
+const number: CSSProperties = { textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' };
+const formatDate = (s: string) => new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(s));
+const signed = (s: string) => Number(s) > 0 ? `+${s}` : s;
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+const isMovement = (v: unknown): v is Movement => isObject(v) && typeof v.movement_id === 'string' &&
+  typeof v.movement_no === 'string' && typeof v.quantity_after === 'string' &&
+  typeof v.quantity_change === 'string' && isObject(v.product) && isObject(v.user) && isObject(v.location);
+function fromQuery(p: URLSearchParams): Filters {
+  return {
+    product_id: p.get('product_id') ?? '', location_id: p.get('location_id') ?? '', user_id: p.get('user_id') ?? '',
+    movement_type: (p.get('movement_type') ?? '').split(',').filter(Boolean),
+    from: p.get('from') ?? '', to: p.get('to') ?? '',
+  };
 }
-function isEntity(value: unknown, keys: string[]): boolean {
-  return isRecord(value) && keys.every((key) => typeof value[key] === "string");
+function localDateBoundary(value: string, end: boolean): string {
+  const [year, month, day] = value.split('-').map(Number);
+  const date = end ? new Date(year, month - 1, day + 1) : new Date(year, month - 1, day);
+  if (end) date.setMilliseconds(date.getMilliseconds() - 1);
+  return date.toISOString();
 }
-function isMovement(value: unknown): value is Movement {
-  if (!isRecord(value)) return false;
-  return (
-    typeof value.movement_id === "string" &&
-    typeof value.movement_type === "string" &&
-    typeof value.created_at === "string" &&
-    typeof value.quantity_change === "string" &&
-    isEntity(value.product, ["product_id", "name", "sku"]) &&
-    isEntity(value.location, ["location_id", "name", "code"]) &&
-    (value.second_location === null || isEntity(value.second_location, ["location_id", "name", "code"])) &&
-    isEntity(value.user, ["user_id", "name", "email"]) &&
-    (value.reason === null || typeof value.reason === "string") &&
-    (value.notes === null || typeof value.notes === "string")
-  );
+function apiParams(filters: Filters, page: number, pageSize: number): URLSearchParams {
+  const p = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  if (filters.product_id) p.set('product_id', filters.product_id);
+  if (filters.location_id) p.set('location_id', filters.location_id);
+  if (filters.user_id) p.set('user_id', filters.user_id);
+  if (filters.movement_type.length) p.set('movement_type', filters.movement_type.join(','));
+  if (filters.from) p.set('from', localDateBoundary(filters.from, false));
+  if (filters.to) p.set('to', localDateBoundary(filters.to, true));
+  return p;
 }
-function formatMovementType(value: string): string {
-  return MOVEMENT_TYPES.find((item) => item.value === value)?.label ??
-    value.toLowerCase().replace(/_/g, " ").replace(/^./, (s) => s.toUpperCase());
-}
-function formatDate(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "Unknown date" :
-    new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date);
-}
-function formatChange(value: string): string {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return value;
-  return number > 0 ? `+${value}` : value;
-}
-async function loadMovementPage(filters: Filters, page: number, pageSize: number, signal: AbortSignal): Promise<MovementPage> {
-  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
-  if (filters.productId) params.set("product_id", filters.productId);
-  if (filters.locationId) params.set("location_id", filters.locationId);
-  if (filters.movementType) params.set("movement_type", filters.movementType);
-  if (filters.from) params.set("from", filters.from);
-  if (filters.to) params.set("to", filters.to);
-  const response = await fetch(`${BASE_URL}/api/stock-movements?${params.toString()}`, {
-    credentials: "include", signal, headers: { Accept: "application/json" },
-  });
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.toLowerCase().includes("application/json")) {
-    throw new Error("The server returned HTML or another unexpected response instead of movement data.");
-  }
+async function json(path: string, signal?: AbortSignal): Promise<unknown> {
+  const response = await fetch(path, { credentials: 'include', cache: 'no-store', headers: { Accept: 'application/json' }, signal });
+  if (!(response.headers.get('content-type') ?? '').includes('application/json')) throw new Error('The server did not return JSON. Check API routing.');
   const body: unknown = await response.json();
-  if (!response.ok) {
-    const message = isRecord(body) && typeof body.error === "string" ? body.error : `Unable to load movements (HTTP ${response.status}).`;
-    if (response.status === 403) throw new Error(`Permission denied: ${message}`);
-    throw new Error(message);
-  }
-  if (!isRecord(body) || !Array.isArray(body.items) || !body.items.every(isMovement) ||
-      typeof body.total !== "number" || !Number.isSafeInteger(body.total) || body.total < 0 ||
-      typeof body.page !== "number" || typeof body.pageSize !== "number") {
-    throw new Error("The server returned an unexpected stock movement history response.");
-  }
-  return body as MovementPage;
+  if (!response.ok) throw new Error(isObject(body) && typeof body.error === 'string' ? body.error : `Request failed (HTTP ${response.status})`);
+  return body;
 }
-
-const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "0.35rem", minWidth: 0 };
-const inputStyle: CSSProperties = { width: "100%", minWidth: 0 };
+function parsePage(value: unknown): Page {
+  if (!isObject(value) || !Array.isArray(value.items) || !value.items.every(isMovement) ||
+    typeof value.total !== 'number' || !Number.isSafeInteger(value.total) ||
+    typeof value.page !== 'number' || typeof value.pageSize !== 'number') throw new Error('Unexpected movement history response.');
+  return value as Page;
+}
+function parseDetail(value: unknown): Detail {
+  if (!isObject(value) || !isMovement(value.movement) || !Array.isArray(value.linked) || !value.linked.every(isMovement)) throw new Error('Unexpected movement details response.');
+  return value as Detail;
+}
 
 export default function StockMovementHistory() {
-  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
-  const [appliedFilters, setAppliedFilters] = useState<Filters>(DEFAULT_FILTERS);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState<number>(20);
-  const [result, setResult] = useState<MovementPage | null>(null);
+  const [params, setParams] = useSearchParams();
+  const key = params.toString();
+  const filters = useMemo(() => fromQuery(new URLSearchParams(key)), [key]);
+  const page = Math.max(1, Number(params.get('page')) || 1);
+  const pageSize = [10, 20, 50, 100].includes(Number(params.get('pageSize'))) ? Number(params.get('pageSize')) : 50;
+  const [applied, setApplied] = useState<Filters>(filters);
+  const [result, setResult] = useState<Page | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
   const [products, setProducts] = useState<ProductOption[]>([]);
   const [locations, setLocations] = useState<LocationOption[]>([]);
-  const [optionsError, setOptionsError] = useState("");
+  const [actors, setActors] = useState<{ user_id: string; name: string }[]>([]);
+  const [optionsError, setOptionsError] = useState('');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<Detail | null>(null);
+  const [detailError, setDetailError] = useState('');
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const invalidRange = Boolean(filters.from && filters.to && filters.from > filters.to);
+  const hasFilters = Boolean(filters.from || filters.to || filters.product_id || filters.location_id || filters.user_id || filters.movement_type.length);
+  const update = useCallback((field: string, value: string) => {
+    setParams(previous => { const next = new URLSearchParams(previous); if (value) next.set(field, value); else next.delete(field); if (field !== 'page') next.delete('page'); return next; }, { replace: true });
+  }, [setParams]);
 
-  // Debounce filter changes. Requests already in flight are aborted by the effect below.
-  useEffect(() => {
-    const timeout = window.setTimeout(() => setAppliedFilters(filters), 350);
-    return () => window.clearTimeout(timeout);
-  }, [filters]);
-
+  // The URL is authoritative. Delay network calls so rapid changes don't trigger requests.
+  useEffect(() => { const id = window.setTimeout(() => setApplied(filters), 350); return () => window.clearTimeout(id); }, [filters]);
   useEffect(() => {
     let active = true;
-    Promise.allSettled([getProducts(), getLocations()]).then(([productResult, locationResult]) => {
+    Promise.allSettled([getProducts(), getLocations(), json(`${URL}/actors`)]).then(([p, l, a]) => {
       if (!active) return;
-      if (productResult.status === "fulfilled") setProducts(productResult.value);
-      if (locationResult.status === "fulfilled") setLocations(locationResult.value);
-      if (productResult.status === "rejected" || locationResult.status === "rejected") {
-        setOptionsError("Some filter choices could not be loaded. Movement history is still available.");
-      }
+      if (p.status === 'fulfilled') setProducts(p.value);
+      if (l.status === 'fulfilled') setLocations(l.value);
+      if (a.status === 'fulfilled' && isObject(a.value) && Array.isArray(a.value.items))
+        setActors(a.value.items.filter((v): v is {user_id: string; name: string} => isObject(v) && typeof v.user_id === 'string' && typeof v.name === 'string'));
+      if (p.status === 'rejected' || l.status === 'rejected' || a.status === 'rejected') setOptionsError('Some filter choices could not be loaded.');
     });
     return () => { active = false; };
   }, []);
-
   useEffect(() => {
-    if (appliedFilters.from && appliedFilters.to && appliedFilters.from > appliedFilters.to) {
-      return;
-    }
-    const controller = new AbortController();
-    // Loading is set immediately for clarity; stale results are discarded on cleanup.
-    loadMovementPage(appliedFilters, page, pageSize, controller.signal)
-      .then((data) => {
-        if (controller.signal.aborted) return;
-        setResult(data);
-        setError("");
-        setLoading(false);
-      })
-      .catch((cause: unknown) => {
-        if (controller.signal.aborted) return;
-        setError(cause instanceof Error ? cause.message : "Unable to load movement history.");
-        setLoading(false);
-      });
-    return () => controller.abort();
-  }, [appliedFilters, page, pageSize, reload]);
+    if (invalidRange || filters !== applied) return;
+    const abort = new AbortController();
+    setLoading(true);
+    json(`${URL}?${apiParams(applied, page, pageSize)}`, abort.signal).then(v => {
+      if (!abort.signal.aborted) { setResult(parsePage(v)); setError(''); }
+    }).catch((e: unknown) => { if (!abort.signal.aborted) setError(e instanceof Error ? e.message : 'Failed to load movements.'); })
+      .finally(() => { if (!abort.signal.aborted) setLoading(false); });
+    return () => abort.abort();
+  }, [applied, page, pageSize, reload, invalidRange, filters]);
+  useEffect(() => {
+    if (!selectedId) return;
+    const abort = new AbortController();
+    setDetail(null); setDetailError(''); setDetailLoading(true);
+    json(`${URL}/${encodeURIComponent(selectedId)}`, abort.signal).then(v => { if (!abort.signal.aborted) setDetail(parseDetail(v)); })
+      .catch((e: unknown) => { if (!abort.signal.aborted) setDetailError(e instanceof Error ? e.message : 'Unable to load movement.'); })
+      .finally(() => { if (!abort.signal.aborted) setDetailLoading(false); });
+    return () => abort.abort();
+  }, [selectedId]);
+  useEffect(() => {
+    if (selectedId) closeRef.current?.focus();
+  }, [selectedId]);
+  useEffect(() => {
+    if (!selectedId) return;
+    const handler = (event: KeyboardEvent) => { if (event.key === 'Escape') { setSelectedId(null); triggerRef.current?.focus(); } };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [selectedId]);
 
-  function changeFilter<K extends keyof Filters>(key: K, value: Filters[K]) {
-    setLoading(true);
-    setFilters((previous) => ({ ...previous, [key]: value }));
-    setPage(1);
+  async function exportCsv() {
+    setExporting(true); setExportError('');
+    try {
+      const response = await fetch(`${URL}/export.csv?${apiParams(applied, 1, 50)}`, { credentials: 'include', cache: 'no-store' });
+      if (!response.ok) {
+        const data: unknown = await response.json().catch(() => null);
+        throw new Error(isObject(data) && typeof data.error === 'string' ? data.error : `Export failed (HTTP ${response.status}).`);
+      }
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a'); link.href = objectUrl; link.download = 'stock-movements.csv'; link.click();
+      window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1000);
+    } catch (e) { setExportError(e instanceof Error ? e.message : 'Export failed.'); }
+    finally { setExporting(false); }
   }
-  function clearFilters() {
-    setLoading(true);
-    setFilters(DEFAULT_FILTERS);
-    setPage(1);
-    setReload((value) => value + 1);
-  }
-  const hasFilters = useMemo(() => Object.values(appliedFilters).some(Boolean), [appliedFilters]);
-  const invalidRange = Boolean(filters.from && filters.to && filters.from > filters.to);
-  const totalPages = result ? Math.max(1, Math.ceil(result.total / pageSize)) : 1;
+  function open(id: string, button?: HTMLButtonElement) { if (button) triggerRef.current = button; setSelectedId(id); }
+  function close() { setSelectedId(null); triggerRef.current?.focus(); }
+  const totalPages = Math.max(1, Math.ceil((result?.total ?? 0) / pageSize));
   const rows = result?.items ?? [];
 
-  return (
-    <AppLayout>
-      <PageHeader title="Stock Movement History" subtitle="Browse the audit trail of inventory movements." />
-      <section className="card" aria-label="Movement filters" style={{ padding: "var(--space-4)", marginTop: "var(--space-4)" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 190px), 1fr))", gap: "var(--space-3)" }}>
-          <label style={fieldStyle}>Product
-            <select className="field-input" style={inputStyle} value={filters.productId} onChange={(e) => changeFilter("productId", e.target.value)}>
-              <option value="">All products</option>
-              {products.map((p) => <option key={p.product_id} value={p.product_id}>{p.name} ({p.sku})</option>)}
-            </select>
-          </label>
-          <label style={fieldStyle}>Location
-            <select className="field-input" style={inputStyle} value={filters.locationId} onChange={(e) => changeFilter("locationId", e.target.value)}>
-              <option value="">All locations</option>
-              {locations.map((l) => <option key={l.location_id} value={l.location_id}>{l.name} ({l.code})</option>)}
-            </select>
-          </label>
-          <label style={fieldStyle}>Movement type
-            <select className="field-input" style={inputStyle} value={filters.movementType} onChange={(e) => changeFilter("movementType", e.target.value)}>
-              <option value="">All types</option>
-              {MOVEMENT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
-          </label>
-          <label style={fieldStyle}>From date
-            <input className="field-input" style={inputStyle} type="date" value={filters.from} max={filters.to || undefined} onChange={(e) => changeFilter("from", e.target.value)} aria-invalid={invalidRange} aria-describedby={invalidRange ? "movement-date-error" : undefined} />
-          </label>
-          <label style={fieldStyle}>To date
-            <input className="field-input" style={inputStyle} type="date" value={filters.to} min={filters.from || undefined} onChange={(e) => changeFilter("to", e.target.value)} aria-invalid={invalidRange} aria-describedby={invalidRange ? "movement-date-error" : undefined} />
-          </label>
+  return <AppLayout>
+    <PageHeader title="Movement Ledger" subtitle="Every stock change, its reason and the resulting balance." />
+    <section className="card" aria-label="Movement filters" style={{ padding: 'var(--space-4)', marginTop: 'var(--space-4)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,190px),1fr))', gap: 'var(--space-3)' }}>
+        <label style={field}>Product<select className="field-input" style={control} value={filters.product_id} onChange={e => update('product_id', e.target.value)}><option value="">All products</option>{products.map(p => <option key={p.product_id} value={p.product_id}>{p.name} ({p.sku})</option>)}</select></label>
+        <label style={field}>Location<select className="field-input" style={control} value={filters.location_id} onChange={e => update('location_id', e.target.value)}><option value="">All locations</option>{locations.map(l => <option key={l.location_id} value={l.location_id}>{l.name} ({l.code})</option>)}</select></label>
+        <label style={field}>Recorded by<select className="field-input" style={control} value={filters.user_id} onChange={e => update('user_id', e.target.value)}><option value="">All users</option>{actors.map(a => <option key={a.user_id} value={a.user_id}>{a.name}</option>)}</select></label>
+        <label style={field}>From date<input className="field-input" style={control} type="date" value={filters.from} onChange={e => update('from', e.target.value)} max={filters.to || undefined} /></label>
+        <label style={field}>To date<input className="field-input" style={control} type="date" value={filters.to} onChange={e => update('to', e.target.value)} min={filters.from || undefined} /></label>
+      </div>
+      <fieldset style={{ border: 0, margin: 'var(--space-3) 0 0', padding: 0 }}><legend>Movement types</legend>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.65rem', marginTop: '0.5rem' }}>{TYPE_OPTIONS.map(([value, label]) => <label key={value} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', whiteSpace: 'nowrap' }}>
+          <input type="checkbox" checked={filters.movement_type.includes(value)} onChange={e => update('movement_type', e.target.checked ? [...filters.movement_type, value].join(',') : filters.movement_type.filter(v => v !== value).join(','))} />{label}</label>)}</div>
+      </fieldset>
+      {invalidRange && <p role="alert">The end date cannot precede the start date.</p>}
+      {optionsError && <p role="status">{optionsError}</p>}
+      <div style={{ display: 'flex', gap: '0.7rem', flexWrap: 'wrap', marginTop: 'var(--space-3)' }}>
+        <button className="btn btn-secondary" type="button" disabled={!hasFilters} onClick={() => setParams(new URLSearchParams({ pageSize: String(pageSize) }))}>Clear filters</button>
+        <button className="btn btn-secondary" type="button" disabled={exporting || loading || invalidRange} onClick={exportCsv}>{exporting ? 'Exporting...' : 'Export filtered CSV'}</button>
+        <button className="btn btn-secondary" type="button" onClick={() => setReload(v => v + 1)}>Refresh</button>
+      </div>
+      {exportError && <p role="alert">{exportError}</p>}
+    </section>
+    <section aria-label="Movement results" style={{ marginTop: 'var(--space-4)' }}>
+      {loading ? <p role="status">Loading movement ledger...</p> : error ? <div role="alert"><p>{error}</p><button type="button" className="btn btn-secondary" onClick={() => setReload(v => v + 1)}>Try again</button></div> : rows.length === 0 ? <p role="status">{hasFilters ? 'Nothing matches these filters. Clear filters to see the full history.' : 'No movements have been recorded yet.'}</p> : <>
+        <p role="status">Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, result?.total ?? 0)} of {result?.total} movements. Select a movement to inspect it.</p>
+        <div className="table-wrap" style={{ maxWidth: '100%', overflowX: 'auto' }}>
+          <table className="data-table"><thead><tr>{['When','Movement / reference','Type','Product','Location(s)','Reason','Who','Change','Balance after','Details'].map(h => <th scope="col" key={h}>{h}</th>)}</tr></thead>
+            <tbody>{rows.map(m => <tr key={m.movement_id}>
+              <td style={{ whiteSpace: 'nowrap' }}>{formatDate(m.created_at)}</td>
+              <td><span className="mono">{m.movement_no}</span><div>{m.reference_no ?? '—'}</div></td>
+              <td>{typeLabel(m.movement_type)}</td>
+              <td>{m.product.name}<div className="mono">{m.product.sku}</div></td>
+              <td>{m.location.name}{m.second_location && <div>↔ {m.second_location.name}</div>}</td>
+              <td>{m.reason_code ?? m.reason ?? '—'}</td><td>{m.user.name}</td>
+              <td style={{ ...number, color: Number(m.quantity_change) < 0 ? '#be123c' : '#047857' }}>{signed(m.quantity_change)}</td>
+              <td style={number} className="mono">{m.quantity_after}</td>
+              <td><button className="btn btn-secondary" type="button" onClick={e => open(m.movement_id, e.currentTarget)}>View</button></td>
+            </tr>)}</tbody></table>
         </div>
-        {invalidRange && <p id="movement-date-error" role="alert" className="locations-error">The end date must not be earlier than the start date.</p>}
-        {optionsError && <p role="status">{optionsError}</p>}
-        <div style={{ marginTop: "var(--space-3)" }}>
-          <button type="button" className="btn btn-secondary" onClick={clearFilters} disabled={!Object.values(filters).some(Boolean) && !error}>Clear filters</button>
-        </div>
-      </section>
-
-      <section aria-label="Movement results" style={{ marginTop: "var(--space-4)" }}>
-        {loading ? <p role="status">Loading stock movements...</p> : error ? (
-          <div role="alert"><p>{error}</p><button type="button" className="btn btn-secondary" onClick={() => { setLoading(true); setReload((v) => v + 1); }}>Try again</button></div>
-        ) : rows.length === 0 ? (
-          <p role="status">{hasFilters ? "No movements match the selected filters." : "No stock movements have been recorded yet."}</p>
-        ) : (
-          <>
-            <p role="status">Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, result?.total ?? 0)} of {result?.total ?? 0} movements</p>
-            <div className="table-wrap" style={{ overflowX: "auto", maxWidth: "100%" }}>
-              <table className="data-table">
-                <thead><tr><th scope="col">Date & time</th><th scope="col">Type</th><th scope="col">Product</th><th scope="col">Location(s)</th><th scope="col">Quantity change</th><th scope="col">Who</th><th scope="col">Note</th></tr></thead>
-                <tbody>{rows.map((m) => <tr key={m.movement_id}>
-                  <td style={{ whiteSpace: "nowrap" }}>{formatDate(m.created_at)}</td>
-                  <td>{formatMovementType(m.movement_type)}</td>
-                  <td>{m.product.name}<div className="mono">{m.product.sku}</div></td>
-                  <td>{m.location.name}{m.second_location && <div>↔ {m.second_location.name}</div>}</td>
-                  <td className="mono" style={{ whiteSpace: "nowrap" }}>{formatChange(m.quantity_change)}</td>
-                  <td>{m.user.name}</td>
-                  <td>{m.notes || m.reason || "—"}</td>
-                </tr>)}</tbody>
-              </table>
-            </div>
-          </>
-        )}
-        {!loading && !error && result && result.total > 0 && (
-          <nav aria-label="Movement history pagination" style={{ display: "flex", gap: "var(--space-3)", flexWrap: "wrap", alignItems: "center", marginTop: "var(--space-4)" }}>
-            <button type="button" className="btn btn-secondary" disabled={page <= 1} onClick={() => { setLoading(true); setPage((p) => Math.max(1, p - 1)); }}>Previous</button>
-            <span>Page {page} of {totalPages}</span>
-            <button type="button" className="btn btn-secondary" disabled={page >= totalPages} onClick={() => { setLoading(true); setPage((p) => Math.min(totalPages, p + 1)); }}>Next</button>
-            <label>Rows per page <select className="field-input" value={pageSize} onChange={(e) => { setLoading(true); setPageSize(Number(e.target.value)); setPage(1); }}>
-              {PAGE_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}
-            </select></label>
-          </nav>
-        )}
-      </section>
-    </AppLayout>
-  );
+      </>}
+      {!loading && !error && result && result.total > 0 && <nav aria-label="Movement pagination" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)', marginTop: 'var(--space-4)' }}>
+        <button type="button" className="btn btn-secondary" disabled={page <= 1} onClick={() => update('page', String(page - 1))}>Previous</button>
+        <span>Page {page} of {totalPages}</span>
+        <button type="button" className="btn btn-secondary" disabled={page >= totalPages} onClick={() => update('page', String(page + 1))}>Next</button>
+        <label>Rows per page <select className="field-input" value={pageSize} onChange={e => setParams(previous => { const next = new URLSearchParams(previous); next.set('pageSize', e.target.value); next.delete('page'); return next; })}>{[10,20,50,100].map(n => <option key={n} value={n}>{n}</option>)}</select></label>
+      </nav>}
+    </section>
+    {selectedId && <div role="presentation" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.45)', display: 'flex', justifyContent: 'flex-end' }} onClick={close}>
+      <aside role="dialog" aria-modal="true" aria-label="Movement details" onClick={e => e.stopPropagation()} style={{ width: 'min(100%,530px)', overflowY: 'auto', background: 'var(--color-surface, white)', color: 'var(--color-text, #0f172a)', padding: '1.5rem', boxShadow: '0 0 24px rgba(0,0,0,.2)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}><h2>Movement details</h2><button ref={closeRef} type="button" className="btn btn-secondary" onClick={close} aria-label="Close movement details">Close</button></div>
+        {detailLoading ? <p role="status">Loading movement...</p> : detailError ? <p role="alert">{detailError}</p> : detail && <>
+          <h3>{detail.movement.movement_no} · {typeLabel(detail.movement.movement_type)}</h3>
+          <dl style={{ display: 'grid', gridTemplateColumns: 'minmax(90px, 140px) 1fr', gap: '0.6rem' }}>
+            {([
+              ['Date', formatDate(detail.movement.created_at)], ['Product', `${detail.movement.product.name} (${detail.movement.product.sku})`],
+              ['Location', detail.movement.location.name], ['Other location', detail.movement.second_location?.name ?? '—'],
+              ['Before', detail.movement.quantity_before], ['Change', signed(detail.movement.quantity_change)],
+              ['After', detail.movement.quantity_after], ['Recorded by', detail.movement.user.name],
+              ['Reason', detail.movement.reason_code ?? detail.movement.reason ?? '—'],
+              ['Reference', detail.movement.reference_no ?? detail.movement.reference_id ?? '—'],
+              ['Note', detail.movement.notes ?? '—'],
+            ] as [string,string][]).map(([label,value]) => <div key={label} style={{ display: 'contents' }}><dt style={{ fontWeight: 600 }}>{label}</dt><dd style={{ margin: 0, overflowWrap: 'anywhere' }}>{value}</dd></div>)}
+          </dl>
+          <h3>Related movements ({detail.linked.length})</h3>
+          {detail.linked.length ? <ul>{detail.linked.map(m => <li key={m.movement_id} style={{ marginBottom: '0.65rem' }}><button className="btn btn-secondary" type="button" onClick={() => setSelectedId(m.movement_id)}>{m.movement_no} · {typeLabel(m.movement_type)} · {signed(m.quantity_change)} · {m.location.name}</button></li>)}</ul> : <p>No other movements with this reference.</p>}
+          <p style={{ fontSize: '0.85rem' }}>This audit record is read-only. Corrections must be posted as separate reversal movements, not edits or deletions.</p>
+        </>}
+      </aside>
+    </div>}
+  </AppLayout>;
 }
