@@ -17,7 +17,7 @@ export default function CustomLoginPage() {
   ): Promise<void> {
     await login(email, password);
 
-    navigate('/dashboard', {
+    navigate('/inventory', {
       replace: true,
     });
   }

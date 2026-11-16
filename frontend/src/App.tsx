@@ -31,6 +31,11 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import Locations from "./pages/Locations";
 import Settings from "./pages/Settings";
 
+function LegacyInventoryRedirect() {
+  const location = useLocation();
+  return <Navigate to={`/inventory${location.search}`} replace />;
+}
+
 function LegacyMovementRedirect() {
   const location = useLocation();
 
@@ -128,14 +133,13 @@ function App() {
           />
 
           <Route
-            path="/inventory_overview"
-            element={
-              <ProtectedRoute>
-                <InventoryOverview />
-              </ProtectedRoute>
-            }
+            path="/inventory_overview" element={<LegacyInventoryRedirect />}
           />
 
+          <Route
+            path="/inventory"
+            element={<ProtectedRoute><InventoryOverview /></ProtectedRoute>}
+          />
           <Route
             path="/inventory_count"
             element={

@@ -2,7 +2,7 @@
 const API_BASE_URL = `${import.meta.env.VITE_API_URL ?? "http://localhost:5000"}/api`;
 
 export interface InventoryRecord {
-  inventory_id: string;
+  inventory_id: string | null;
   product_id: string;
   location_id: string;
   quantity: number;
@@ -282,7 +282,7 @@ export async function getInventory(): Promise<InventoryRecord[]> {
     for (const item of data.items) {
       if (
         !isObject(item) ||
-        typeof item.inventory_id !== "string" ||
+        (item.inventory_id !== null && typeof item.inventory_id !== "string") ||
         typeof item.product_id !== "string" ||
         typeof item.location_id !== "string" ||
         typeof item.name !== "string" ||
