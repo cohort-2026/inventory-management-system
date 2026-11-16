@@ -4,7 +4,7 @@ import { useAuth } from '../utils/AuthContext';
 const NAV_ITEMS = [
   { label: "Dashboard", path: "/dashboard" },
   { label: "Products", path: "/product_list" },
-  { label: "Inventory", path: "/inventory_overview" },
+  { label: "Inventory", path: "/inventory" },
   { label: "Counts", path: "/inventory_count" },
   { label: "Locations", path: "/locations" },
   { label: "Movement History", path: "/movements" },
