@@ -7,7 +7,7 @@ const NAV_ITEMS = [
   { label: "Inventory", path: "/inventory_overview" },
   { label: "Counts", path: "/inventory_count" },
   { label: "Locations", path: "/locations" },
-  { label: "Movement History", path: "/movements" },
+  { label: "Movement History", path: "/stock_movement_history" },
   { label: "Settings", path: "/settings" },
 ];
 

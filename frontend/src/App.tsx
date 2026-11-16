@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './utils/AuthContext';
 import ProtectedRoute from './components/ProtectedRoutes';
 import Home from './pages/Home';
@@ -22,11 +22,6 @@ import ResetPasswordPage from './pages/ResetPasswordPage';
 import Locations from './pages/Locations';
 import Settings from './pages/Settings';
 
-function LegacyMovementRedirect() {
-  const location = useLocation();
-  return <Navigate to={`/movements${location.search}`} replace />;
-}
-
 function App() {
   return (
     <AuthProvider>
@@ -46,8 +41,7 @@ function App() {
           <Route path="/inventory_overview" element={<ProtectedRoute><InventoryOverview /></ProtectedRoute>} />
           <Route path="/inventory_count" element={<ProtectedRoute><InventoryCount /></ProtectedRoute>} />
           <Route path="/inventory_count/:countId" element={<ProtectedRoute><InventoryCountDetail /></ProtectedRoute>} />
-          <Route path="/movements" element={<ProtectedRoute><StockMovementHistory /></ProtectedRoute>} />
-          <Route path="/stock_movement_history" element={<LegacyMovementRedirect />} />
+          <Route path="/stock_movement_history" element={<ProtectedRoute><StockMovementHistory /></ProtectedRoute>} />
           <Route path="/locations" element={<ProtectedRoute><Locations /></ProtectedRoute>} />
           <Route path="/verify-email" element={<VerifyEmailPage />} />
           <Route path="/resend-verification" element={<ResendVerificationPage />} />
