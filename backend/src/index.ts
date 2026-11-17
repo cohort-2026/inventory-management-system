@@ -16,6 +16,7 @@ import inventoryCountsRouter from './routes/inventoryCounts';
 import stockMovementsRouter from './routes/stockMovements';
 import reasonCodesRouter from './routes/reasonCodes';
 import dashboardRoutes from './routes/dashboardRoutes';
+import { supplierRouter, receiptRouter } from './routes/receiving';
 
 
 const app = express();
@@ -64,6 +65,10 @@ app.use('/api/inventory/counts', inventoryCountsRouter);
 app.use('/api/stock-movements', stockMovementsRouter);
 app.use('/api/reason-codes', reasonCodesRouter);
 app.use('/api/dashboard', dashboardRoutes);
+
+// F06 Receiving stock routes
+app.use('/api/suppliers', supplierRouter);
+app.use('/api/receipts', receiptRouter);
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
