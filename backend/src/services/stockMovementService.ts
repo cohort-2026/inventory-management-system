@@ -28,6 +28,7 @@ export type PostMovementInput = {
   reason_code_id: string;
   direction?: MovementDirection;
   reference_no?: string | null;
+  reference_id?: string | null;
   notes?: string | null;
 };
 
@@ -148,6 +149,7 @@ export async function postMovement(
   validateUuid(input.location_id, 'location_id');
   validateUuid(input.user_id, 'user_id');
   validateUuid(input.reason_code_id, 'reason_code_id');
+  if (input.reference_id != null) validateUuid(input.reference_id, 'reference_id');
 
   if (
     input.movement_type === 'TRANSFER_IN' ||
@@ -306,13 +308,14 @@ export async function postMovement(
        quantity_after,
        reason_code_id,
        reference_no,
+       reference_id,
        reason,
        notes
      )
      VALUES (
        $1, $2, $3, $4,
        $5::numeric, $6::numeric, $7::numeric,
-       $8, $9, $10, $11
+       $8, $9, $10, $11, $12
      )
      RETURNING
        movement_id,
@@ -339,6 +342,7 @@ export async function postMovement(
       inventory.quantity_after,
       input.reason_code_id,
       input.reference_no?.trim() || null,
+      input.reference_id ?? null,
       reasonCode.label,
       notes,
     ],

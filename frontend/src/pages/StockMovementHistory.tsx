@@ -68,6 +68,7 @@ type Filters = {
   product_id: string;
   location_id: string;
   user_id: string;
+  reference_id: string;
   movement_type: string[];
   from: string;
   to: string;
@@ -145,6 +146,7 @@ function fromQuery(p: URLSearchParams): Filters {
     product_id: p.get('product_id') ?? '',
     location_id: p.get('location_id') ?? '',
     user_id: p.get('user_id') ?? '',
+    reference_id: p.get('reference_id') ?? '',
     movement_type: (p.get('movement_type') ?? '')
       .split(',')
       .filter(Boolean),
@@ -190,6 +192,9 @@ function apiParams(
 
   if (filters.user_id) {
     p.set('user_id', filters.user_id);
+  }
+  if (filters.reference_id) {
+    p.set('reference_id', filters.reference_id);
   }
 
   if (filters.movement_type.length) {
@@ -338,6 +343,7 @@ export default function StockMovementHistory() {
       filters.product_id ||
       filters.location_id ||
       filters.user_id ||
+      filters.reference_id ||
       filters.movement_type.length,
   );
 
@@ -783,6 +789,7 @@ export default function StockMovementHistory() {
             marginTop: 'var(--space-3)',
           }}
         >
+          {filters.reference_id && <p role="status">Showing movements for linked document. Use Clear filters to return to all movements.</p>}
           <button
             className="btn btn-secondary"
             type="button"
@@ -1132,6 +1139,13 @@ export default function StockMovementHistory() {
                   ))}
                 </dl>
 
+                {detail.movement.movement_type === 'RECEIPT' &&
+                 detail.movement.reference_no?.startsWith('GRN-') &&
+                 detail.movement.reference_id && (
+                  <p><Link to={`/receiving/${encodeURIComponent(detail.movement.reference_id)}`}>
+                    Open goods-received note {detail.movement.reference_no}
+                  </Link></p>
+                )}
                 <h3>
                   Related movements ({detail.linked.length})
                 </h3>
