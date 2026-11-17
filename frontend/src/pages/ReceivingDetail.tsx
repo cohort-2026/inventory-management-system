@@ -5,6 +5,12 @@ import AppLayout from '../components/AppLayout';
 import PageHeader from '../components/PageHeader';
 import { useAuth } from '../utils/AuthContext';
 import {
+  formatReceiptBaseUnits,
+  formatReceiptDecimal,
+  isShortReceipt,
+  isZeroReceipt
+} from '../utils/receiptDecimal';
+import {
   getReceipt,
   listProducts,
   saveLines,
@@ -263,10 +269,14 @@ export default function ReceivingDetail() {
                         )
                       : null;
 
-                    const received = Number(line.received_packs);
-                    const expected = Number(line.expected_packs);
-                    const base =
-                      received * Number(line.units_per_pack);
+                    const base = formatReceiptBaseUnits(
+                      line.received_packs,
+                      line.units_per_pack
+                    );
+                    const shortDelivery = isShortReceipt(
+                      line.received_packs,
+                      line.expected_packs
+                    );
 
                     return (
                       <tr
@@ -340,12 +350,12 @@ export default function ReceivingDetail() {
                                 }
                               />
                             ) : (
-                              line[k]
+                              formatReceiptDecimal(line[k])
                             )}
                           </td>
                         ))}
 
-                        <td>{base.toLocaleString()}</td>
+                        <td>{base}</td>
 
                         <td>
                           {editable ? (
@@ -361,7 +371,7 @@ export default function ReceivingDetail() {
                               }
                             />
                           ) : (
-                            line.unit_cost ?? '—'
+                            formatReceiptDecimal(line.unit_cost)
                           )}
                         </td>
 
@@ -369,7 +379,7 @@ export default function ReceivingDetail() {
                           {editable ? (
                             <input
                               className="field-input"
-                              required={received < expected}
+                              required={shortDelivery}
                               aria-label={`Short delivery note for line ${i + 1}`}
                               value={line.short_delivery_note ?? ''}
                               onChange={e =>
@@ -461,7 +471,7 @@ export default function ReceivingDetail() {
                     dirty ||
                     stored.length === 0 ||
                     stored.every(
-                      l => Number(l.received_packs) === 0
+                      l => isZeroReceipt(l.received_packs)
                     )
                   }
                   onClick={() => void post()}

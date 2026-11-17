@@ -59,7 +59,7 @@ function id(x: unknown, name: string): string {
 
 function qty(x: unknown, name: string, positive = false): string {
   const v = String(x);
-  if ((typeof x !== 'string' && typeof x !== 'number') || !/^\d+(?:\.\d{1,4})?$/.test(v) || v.length > 24 || (positive && Number(v) <= 0)) throw new ApiError(400, `${name} must be ${positive ? 'positive' : 'nonnegative'} with up to four decimals.`);
+  if ((typeof x !== 'string' && typeof x !== 'number') || !/^\d+(?:\.\d{1,4})?$/.test(v) || v.length > 24 || (positive && !/[1-9]/.test(v))) throw new ApiError(400, `${name} must be ${positive ? 'positive' : 'nonnegative'} with up to four decimals.`);
   return v;
 }
 
@@ -255,7 +255,7 @@ export async function replaceReceiptLines(
         }
         const check = await c.query(
           `SELECT
-            ($1::numeric * $2::numeric) < ($3::numeric * $2::numeric) AS short,
+            ($3::numeric < $1::numeric) AS short,
             ($3::numeric * $2::numeric)::text AS base_units`,
           [
             l.expected_packs,
@@ -311,60 +311,139 @@ export async function replaceReceiptLines(
   }
 }
 
-export async function postReceipt(req: SessionAuthenticatedRequest, res: Response) {
+export async function postReceipt(
+  req: SessionAuthenticatedRequest,
+  res: Response
+): Promise<void> {
   try {
-    const rid = receiptId(req), user = who(req);
-    const result = await withTransaction(async c => {
-      const r = await c.query(`SELECT * FROM public.goods_receipts WHERE receipt_id=$1 FOR UPDATE`, [rid]);
-      if (!r.rowCount) throw new ApiError(404, 'GRN not found.');
-      const receipt = r.rows[0];
-      if (receipt.status !== 'draft') throw new ApiError(409, 'GRN already posted.');
-      await active(c, 'suppliers', 'supplier_id', receipt.supplier_id);
-      await active(c, 'locations', 'location_id', receipt.location_id);
-      const lines = await c.query(`SELECT line_number,product_id,expected_packs,received_packs,units_per_pack,short_delivery_note, (received_packs*units_per_pack)::text AS base_units FROM public.goods_receipt_lines WHERE receipt_id=$1 ORDER BY product_id`, [rid]);
-      if (!lines.rowCount) throw new ApiError(400, 'Add at least one line before posting.');
-      const reasons = await c.query<{ reason_code_id: string }>(
-        `
-          SELECT reason_code_id
-          FROM public.reason_codes
-          WHERE movement_type = 'RECEIPT'
-            AND code = 'SUPPLIER_DELIVERY'
-            AND active = true
-          LIMIT 1
-        `
+    const rid = receiptId(req);
+    const user = who(req);
+
+    const result = await withTransaction(async client => {
+      const receiptResult = await client.query(
+        `SELECT *
+         FROM public.goods_receipts
+         WHERE receipt_id = $1
+         FOR UPDATE`,
+        [rid]
       );
-      const supplierDeliveryReason = reasons.rows[0];
+
+      const receipt = receiptResult.rows[0];
+      if (!receipt) {
+        throw new ApiError(404, 'GRN not found.');
+      }
+      if (receipt.status !== 'draft') {
+        throw new ApiError(409, 'GRN already posted.');
+      }
+
+      await active(client, 'suppliers', 'supplier_id', receipt.supplier_id);
+      await active(client, 'locations', 'location_id', receipt.location_id);
+
+      // PostgreSQL NUMERIC comparisons and multiplication are exact.
+      // Do not convert quantities to JavaScript Number values.
+      const linesResult = await client.query<{
+        product_id: string;
+        short_delivery_note: string | null;
+        is_short: boolean;
+        has_stock: boolean;
+        base_units: string;
+      }>(
+        `SELECT
+           product_id,
+           short_delivery_note,
+           received_packs < expected_packs AS is_short,
+           received_packs * units_per_pack > 0 AS has_stock,
+           (received_packs * units_per_pack)::text AS base_units
+         FROM public.goods_receipt_lines
+         WHERE receipt_id = $1
+         ORDER BY line_number`,
+        [rid]
+      );
+
+      if (linesResult.rows.length === 0) {
+        throw new ApiError(400, 'Add at least one line before posting.');
+      }
+
+      const reasonResult = await client.query<{ reason_code_id: string }>(
+        `SELECT reason_code_id
+         FROM public.reason_codes
+         WHERE movement_type = 'RECEIPT'
+           AND code = 'SUPPLIER_DELIVERY'
+           AND active = true
+         LIMIT 1`
+      );
+
+      const supplierDeliveryReason = reasonResult.rows[0];
       if (!supplierDeliveryReason) {
         throw new ApiError(
           409,
           'Active SUPPLIER_DELIVERY reason code is missing; configure it before posting.'
         );
       }
+
       const movements = [];
-      for (const l of lines.rows) {
-        if (Number(l.received_packs) < Number(l.expected_packs) && !l.short_delivery_note) throw new ApiError(400, 'Short-delivery explanation required.');
-        if (Number(l.base_units) === 0) continue;
-        const notes = `GRN ${receipt.receipt_no}; delivery ${receipt.delivery_note}; ${l.short_delivery_note ?? ''}`.trim().slice(0, 2000);
+
+      for (const line of linesResult.rows) {
+        if (line.is_short && !line.short_delivery_note?.trim()) {
+          throw new ApiError(400, 'Short-delivery explanation required.');
+        }
+
+        // Zero-received lines stay on the GRN but do not write ledger entries.
+        if (!line.has_stock) {
+          continue;
+        }
+
+        const notes = [
+          `GRN ${receipt.receipt_no}`,
+          `delivery ${receipt.delivery_note}`,
+          line.short_delivery_note ?? ''
+        ]
+          .filter(Boolean)
+          .join('; ')
+          .slice(0, 2000);
+
         movements.push(
-          await postMovement(c, {
-            product_id: l.product_id,
+          await postMovement(client, {
+            product_id: line.product_id,
             location_id: receipt.location_id,
             user_id: user,
             movement_type: 'RECEIPT',
-            quantity: l.base_units,
+            quantity: line.base_units,
             reason_code_id: supplierDeliveryReason.reason_code_id,
             reference_no: receipt.receipt_no,
             reference_id: rid,
-            notes,
+            notes
           })
         );
       }
-      if (!movements.length) throw new ApiError(400, 'A GRN requires at least one positive received quantity.');
-      await c.query(`UPDATE public.goods_receipts SET status='posted',posted_by=$2,posted_at=now(),updated_at=now() WHERE receipt_id=$1`, [rid, user]);
-      return { receipt_id: rid, receipt_no: receipt.receipt_no, status: 'posted', movements };
+
+      if (movements.length === 0) {
+        throw new ApiError(
+          400,
+          'A GRN requires at least one positive received quantity.'
+        );
+      }
+
+      await client.query(
+        `UPDATE public.goods_receipts
+         SET status = 'posted',
+             posted_by = $2,
+             posted_at = now(),
+             updated_at = now()
+         WHERE receipt_id = $1`,
+        [rid, user]
+      );
+
+      return {
+        receipt_id: rid,
+        receipt_no: receipt.receipt_no,
+        status: 'posted',
+        movements
+      };
     });
+
     res.json(result);
-  } catch (e) {
-    fail(res, e);
+  } catch (error) {
+    fail(res, error);
   }
 }
