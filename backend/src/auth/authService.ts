@@ -22,6 +22,7 @@ export type AuthUser = {
   roleId: string;
   status: string;
   emailVerified: boolean;
+  homeLocationId: string | null;
 };
 
 export class AuthServiceError extends Error {
@@ -99,6 +100,7 @@ type UserRow = {
   role_id: string;
   status: string;
   email_verified_at: Date | null;
+  home_location_id: string | null;
 };
 
 function mapUser(row: UserRow): AuthUser {
@@ -110,6 +112,7 @@ function mapUser(row: UserRow): AuthUser {
     roleId: row.role_id,
     status: row.status,
     emailVerified: row.email_verified_at !== null,
+    homeLocationId: row.home_location_id,
   };
 }
 
@@ -229,6 +232,7 @@ export async function registerUser(
       roleId: viewerRoleId,
       status: 'active',
       emailVerified: false,
+      homeLocationId: null,
     };
   } catch (error) {
     await client.query('ROLLBACK');
@@ -289,6 +293,7 @@ export async function authenticateUser(
         u.last_name,
         u.role_id,
         u.status,
+        u.home_location_id,
         c.password_hash,
         c.email_verified_at
       FROM public.users AS u
