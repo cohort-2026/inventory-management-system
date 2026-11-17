@@ -18,6 +18,8 @@ type ManagedUser = {
   status: string;
   roleId: string;
   roleName: SystemRole;
+  homeLocationId: string | null;
+  homeLocationName: string | null;
 };
 
 type Role = {
@@ -25,9 +27,19 @@ type Role = {
   name: SystemRole;
 };
 
+type LocationOption = {
+  location_id: string;
+  name: string;
+  status: string;
+};
+
 type UsersResponse = {
   items: ManagedUser[];
   roles: Role[];
+};
+
+type LocationsResponse = {
+  items: LocationOption[];
 };
 
 type UpdateResponse = {
@@ -60,12 +72,18 @@ async function readError(
 export default function Settings() {
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
+  const [locations, setLocations] =
+    useState<LocationOption[]>([]);
 
   const [selectedRoles, setSelectedRoles] =
     useState<Record<string, string>>({});
 
+  const [selectedLocations, setSelectedLocations] =
+    useState<Record<string, string>>({});
+
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+
   const [savingUserId, setSavingUserId] =
     useState<string | null>(null);
 
@@ -83,24 +101,42 @@ export default function Settings() {
       setLoadError('');
 
       try {
-        const response = await fetch(
-          `${API_BASE}/api/admin/users`,
-          {
-            credentials: 'include',
-            cache: 'no-store',
-            signal: controller.signal,
-          },
-        );
+        const [usersResponse, locationsResponse] =
+          await Promise.all([
+            fetch(`${API_BASE}/api/admin/users`, {
+              credentials: 'include',
+              cache: 'no-store',
+              signal: controller.signal,
+            }),
+            fetch(`${API_BASE}/api/locations`, {
+              credentials: 'include',
+              cache: 'no-store',
+              signal: controller.signal,
+            }),
+          ]);
 
-        if (!response.ok) {
-          throw new Error(await readError(response));
+        if (!usersResponse.ok) {
+          throw new Error(
+            await readError(usersResponse),
+          );
         }
 
-        const data: UsersResponse = await response.json();
+        if (!locationsResponse.ok) {
+          throw new Error(
+            await readError(locationsResponse),
+          );
+        }
+
+        const usersData: UsersResponse =
+          await usersResponse.json();
+
+        const locationsData: LocationsResponse =
+          await locationsResponse.json();
 
         if (
-          !Array.isArray(data.items) ||
-          !Array.isArray(data.roles)
+          !Array.isArray(usersData.items) ||
+          !Array.isArray(usersData.roles) ||
+          !Array.isArray(locationsData.items)
         ) {
           throw new Error(
             'Unexpected user management response.',
@@ -108,14 +144,32 @@ export default function Settings() {
         }
 
         if (!controller.signal.aborted) {
-          setUsers(data.items);
-          setRoles(data.roles);
+          const activeLocations =
+            locationsData.items.filter(
+              (location) =>
+                location.status === 'active' &&
+                typeof location.location_id === 'string' &&
+                typeof location.name === 'string',
+            );
+
+          setUsers(usersData.items);
+          setRoles(usersData.roles);
+          setLocations(activeLocations);
 
           setSelectedRoles(
             Object.fromEntries(
-              data.items.map((user) => [
+              usersData.items.map((user) => [
                 user.id,
                 user.roleId,
+              ]),
+            ),
+          );
+
+          setSelectedLocations(
+            Object.fromEntries(
+              usersData.items.map((user) => [
+                user.id,
+                user.homeLocationId ?? '',
               ]),
             ),
           );
@@ -125,7 +179,7 @@ export default function Settings() {
           setLoadError(
             error instanceof Error
               ? error.message
-              : 'Unable to load users.',
+              : 'Unable to load user management data.',
           );
         }
       } finally {
@@ -199,6 +253,11 @@ export default function Settings() {
         [updated.id]: updated.roleId,
       }));
 
+      setSelectedLocations((current) => ({
+        ...current,
+        [updated.id]: updated.homeLocationId ?? '',
+      }));
+
       setSuccessMessage(
         `Role updated successfully for ${updated.email}.`,
       );
@@ -209,6 +268,88 @@ export default function Settings() {
           error instanceof Error
             ? error.message
             : 'Unable to update role.',
+      }));
+    } finally {
+      setSavingUserId(null);
+    }
+  }
+
+  async function saveHomeLocation(
+    user: ManagedUser,
+  ): Promise<void> {
+    if (
+      savingUserId !== null ||
+      user.roleName !== 'Inventory Staff'
+    ) {
+      return;
+    }
+
+    const homeLocationId =
+      selectedLocations[user.id];
+
+    if (
+      !homeLocationId ||
+      homeLocationId === user.homeLocationId
+    ) {
+      return;
+    }
+
+    setSavingUserId(user.id);
+    setSuccessMessage('');
+
+    setRowErrors((current) => ({
+      ...current,
+      [user.id]: '',
+    }));
+
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/admin/users/${encodeURIComponent(user.id)}/home-location`,
+        {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ homeLocationId }),
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error(await readError(response));
+      }
+
+      const data: UpdateResponse = await response.json();
+
+      if (!data.user) {
+        throw new Error(
+          'The server did not return the updated user.',
+        );
+      }
+
+      const updated = data.user;
+
+      setUsers((current) =>
+        current.map((item) =>
+          item.id === updated.id ? updated : item,
+        ),
+      );
+
+      setSelectedLocations((current) => ({
+        ...current,
+        [updated.id]: updated.homeLocationId ?? '',
+      }));
+
+      setSuccessMessage(
+        `Home warehouse updated successfully for ${updated.email}.`,
+      );
+    } catch (error) {
+      setRowErrors((current) => ({
+        ...current,
+        [user.id]:
+          error instanceof Error
+            ? error.message
+            : 'Unable to update home warehouse.',
       }));
     } finally {
       setSavingUserId(null);
@@ -228,7 +369,7 @@ export default function Settings() {
           marginBottom: 'var(--space-5)',
         }}
       >
-        Manage application users and their assigned roles.
+        Manage application users, assigned roles and home warehouses.
       </p>
 
       <Card title="User Management">
@@ -282,21 +423,34 @@ export default function Settings() {
                       <th scope="col">Status</th>
                       <th scope="col">Current Role</th>
                       <th scope="col">Assign Role</th>
+                      <th scope="col">Home Warehouse</th>
                       <th scope="col">Action</th>
                     </tr>
                   </thead>
 
                   <tbody>
                     {users.map((user) => {
-                      const selected =
+                      const selectedRole =
                         selectedRoles[user.id] ??
                         user.roleId;
 
-                      const hasChanges =
-                        selected !== user.roleId;
+                      const hasRoleChanges =
+                        selectedRole !== user.roleId;
+
+                      const selectedLocation =
+                        selectedLocations[user.id] ??
+                        user.homeLocationId ??
+                        '';
+
+                      const hasLocationChanges =
+                        selectedLocation !==
+                        (user.homeLocationId ?? '');
 
                       const saving =
                         savingUserId === user.id;
+
+                      const isInventoryStaff =
+                        user.roleName === 'Inventory Staff';
 
                       return (
                         <tr key={user.id}>
@@ -347,15 +501,10 @@ export default function Settings() {
                             <select
                               id={`role-${user.id}`}
                               className="field-select"
-                              value={selected}
+                              value={selectedRole}
                               disabled={savingUserId !== null}
                               aria-invalid={
                                 !!rowErrors[user.id]
-                              }
-                              aria-describedby={
-                                rowErrors[user.id]
-                                  ? `role-error-${user.id}`
-                                  : undefined
                               }
                               onChange={(event) => {
                                 setSelectedRoles(
@@ -385,15 +534,99 @@ export default function Settings() {
                                 </option>
                               ))}
                             </select>
+                          </td>
 
-                            {rowErrors[user.id] && (
-                              <p
-                                id={`role-error-${user.id}`}
-                                className="field-error"
-                                role="alert"
-                              >
-                                {rowErrors[user.id]}
-                              </p>
+                          <td>
+                            {isInventoryStaff ? (
+                              <>
+                                <label
+                                  className="field-label"
+                                  htmlFor={`location-${user.id}`}
+                                >
+                                  <span
+                                    style={{
+                                      position: 'absolute',
+                                      width: '1px',
+                                      height: '1px',
+                                      padding: 0,
+                                      overflow: 'hidden',
+                                      clip: 'rect(0, 0, 0, 0)',
+                                      whiteSpace: 'nowrap',
+                                      border: 0,
+                                    }}
+                                  >
+                                    Home warehouse for {user.email}
+                                  </span>
+                                </label>
+
+                                <select
+                                  id={`location-${user.id}`}
+                                  className="field-select"
+                                  value={selectedLocation}
+                                  disabled={
+                                    savingUserId !== null
+                                  }
+                                  aria-invalid={
+                                    !!rowErrors[user.id]
+                                  }
+                                  onChange={(event) => {
+                                    setSelectedLocations(
+                                      (current) => ({
+                                        ...current,
+                                        [user.id]:
+                                          event.target.value,
+                                      }),
+                                    );
+
+                                    setSuccessMessage('');
+
+                                    setRowErrors(
+                                      (current) => ({
+                                        ...current,
+                                        [user.id]: '',
+                                      }),
+                                    );
+                                  }}
+                                >
+                                  <option value="">
+                                    Select warehouse
+                                  </option>
+
+                                  {locations.map((location) => (
+                                    <option
+                                      key={location.location_id}
+                                      value={location.location_id}
+                                    >
+                                      {location.name}
+                                    </option>
+                                  ))}
+                                </select>
+
+                                {hasLocationChanges && (
+                                  <button
+                                    type="button"
+                                    className="btn btn-primary btn-sm"
+                                    style={{
+                                      marginTop: 'var(--space-2)',
+                                    }}
+                                    disabled={
+                                      savingUserId !== null ||
+                                      !selectedLocation
+                                    }
+                                    onClick={() => {
+                                      void saveHomeLocation(user);
+                                    }}
+                                  >
+                                    {saving
+                                      ? 'Saving...'
+                                      : 'Save Warehouse'}
+                                  </button>
+                                )}
+                              </>
+                            ) : (
+                              <span className="field-hint">
+                                Not applicable
+                              </span>
                             )}
                           </td>
 
@@ -402,7 +635,7 @@ export default function Settings() {
                               type="button"
                               className="btn btn-primary btn-sm"
                               disabled={
-                                !hasChanges ||
+                                !hasRoleChanges ||
                                 savingUserId !== null
                               }
                               onClick={() => {
@@ -413,6 +646,18 @@ export default function Settings() {
                                 ? 'Saving...'
                                 : 'Save Role'}
                             </button>
+
+                            {rowErrors[user.id] && (
+                              <p
+                                className="field-error"
+                                role="alert"
+                                style={{
+                                  marginTop: 'var(--space-2)',
+                                }}
+                              >
+                                {rowErrors[user.id]}
+                              </p>
+                            )}
                           </td>
                         </tr>
                       );

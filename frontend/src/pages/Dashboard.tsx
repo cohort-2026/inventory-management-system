@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import AppLayout from "../components/AppLayout";
@@ -9,274 +10,787 @@ import Badge from "../components/Badge";
 import { useAuth } from "../utils/AuthContext";
 
 type RecordObject = Record<string, unknown>;
-type InventoryRow = {
-  inventory_id: string | null;
-  product_id: string;
+
+type LocationOption = {
+  location_id: string;
   name: string;
+  status: string;
+};
+
+type AttentionRow = {
+  product_id: string;
+  product_name: string;
   sku: string;
+  location_id: string;
   location_name: string;
   quantity: number;
   reorder_level: number;
-  stock_status: "LOW_STOCK" | "OUT_OF_STOCK" | "IN_STOCK";
+  suggested_quantity: number;
+  stock_status: "OUT" | "LOW";
 };
+
 type MovementRow = {
   movement_id: string;
-  created_at: string;
+  movement_no: string;
   movement_type: string;
-  product: { name: string; sku: string };
-  location: { name: string };
-  second_location: { name: string } | null;
-  quantity_change: string;
-  user: { name: string };
-  notes: string | null;
-  reason: string | null;
+  product_id: string;
+  product_name: string;
+  sku: string;
+  location_id: string;
+  location_name: string;
+  quantity_change: number;
+  quantity_before: number;
+  quantity_after: number;
+  user_id: string;
+  user_name: string;
+  created_at: string;
 };
 
-type InventorySummary = {
-  stockedProducts: number;
-  totalUnits: number;
-  lowStock: number;
-  outOfStock: number;
-  attention: InventoryRow[];
+type DashboardSummary = {
+  active_lines: number;
+  units_on_hand: number;
+  low_stock: number;
+  out_of_stock: number;
+  movements_today: number;
+  pending_counts: number;
+  counts_to_review: number;
+  needs_attention: AttentionRow[];
+  recent_movements: MovementRow[];
+  time_zone: string;
+  generated_at: string;
 };
 
-const API_BASE_URL = `${import.meta.env.VITE_API_URL ?? "http://localhost:5000"}/api`;
-const formatQuantity = (value: number) => new Intl.NumberFormat(undefined, { maximumFractionDigits: 6 }).format(value);
-const isObject = (value: unknown): value is RecordObject => typeof value === "object" && value !== null;
+const API_BASE_URL = `${
+  import.meta.env.VITE_API_URL ?? "http://localhost:5000"
+}/api`;
 
-async function getJson(path: string, signal: AbortSignal): Promise<unknown> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+const formatQuantity = (value: number) =>
+  new Intl.NumberFormat(undefined, {
+    maximumFractionDigits: 6,
+  }).format(value);
+
+const isObject = (
+  value: unknown,
+): value is RecordObject =>
+  typeof value === "object" && value !== null;
+
+async function getLocations(
+  signal: AbortSignal,
+): Promise<LocationOption[]> {
+  const response = await fetch(`${API_BASE_URL}/locations`, {
+    method: "GET",
     signal,
     credentials: "include",
-    headers: { Accept: "application/json" },
+    cache: "no-store",
+    headers: {
+      Accept: "application/json",
+    },
   });
-  const contentType = response.headers.get("content-type") ?? "";
+
+  const contentType =
+    response.headers.get("content-type") ?? "";
+
   if (!contentType.includes("application/json")) {
-    throw new Error("The API returned a non-JSON response. Check the deployed API route.");
+    throw new Error("The locations API returned a non-JSON response.");
   }
+
   const data: unknown = await response.json();
+
   if (!response.ok) {
-    throw new Error(isObject(data) && typeof data.error === "string" ? data.error : `Request failed (HTTP ${response.status}).`);
+    throw new Error(
+      isObject(data) && typeof data.error === "string"
+        ? data.error
+        : `Unable to load warehouses (HTTP ${response.status}).`,
+    );
   }
-  return data;
+
+  if (!isObject(data) || !Array.isArray(data.items)) {
+    throw new Error("The locations API returned an unexpected response.");
+  }
+
+  return data.items.filter(
+    (item): item is LocationOption =>
+      isObject(item) &&
+      typeof item.location_id === "string" &&
+      typeof item.name === "string" &&
+      typeof item.status === "string" &&
+      item.status === "active",
+  );
 }
 
-function parseInventoryRow(value: unknown): InventoryRow {
-  if (!isObject(value) || (value.inventory_id !== null && typeof value.inventory_id !== "string") || typeof value.product_id !== "string" ||
-      typeof value.name !== "string" || typeof value.sku !== "string" || typeof value.location_name !== "string" ||
-      !["LOW_STOCK", "OUT_OF_STOCK", "IN_STOCK"].includes(String(value.stock_status))) {
-    throw new Error("The inventory API returned an unexpected record.");
+async function getDashboardSummary(
+  signal: AbortSignal,
+  locationId: string,
+): Promise<DashboardSummary> {
+  const params = new URLSearchParams();
+
+  if (locationId) {
+    params.set("location_id", locationId);
   }
-  const quantity = Number(value.quantity);
-  const reorderLevel = Number(value.reorder_level);
-  if (value.quantity == null || value.reorder_level == null || !Number.isFinite(quantity) || !Number.isFinite(reorderLevel)) {
-    throw new Error("The inventory API returned an invalid quantity.");
+
+  const query = params.toString();
+  const url = `${API_BASE_URL}/dashboard/summary${
+    query ? `?${query}` : ""
+  }`;
+
+  const response = await fetch(url, {
+    method: "GET",
+    signal,
+    credentials: "include",
+    cache: "no-store",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  const contentType =
+    response.headers.get("content-type") ?? "";
+
+  if (!contentType.includes("application/json")) {
+    throw new Error(
+      "The API returned a non-JSON response. Check the dashboard API route.",
+    );
   }
-  return {
-    inventory_id: value.inventory_id,
-    product_id: value.product_id,
-    name: value.name,
-    sku: value.sku,
-    location_name: value.location_name,
-    quantity,
-    reorder_level: reorderLevel,
-    stock_status: value.stock_status as InventoryRow["stock_status"],
-  };
+
+  const data: unknown = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      isObject(data) && typeof data.error === "string"
+        ? data.error
+        : `Dashboard request failed (HTTP ${response.status}).`,
+    );
+  }
+
+  if (
+    !isObject(data) ||
+    typeof data.active_lines !== "number" ||
+    typeof data.units_on_hand !== "number" ||
+    typeof data.low_stock !== "number" ||
+    typeof data.out_of_stock !== "number" ||
+    typeof data.movements_today !== "number" ||
+    typeof data.pending_counts !== "number" ||
+    typeof data.counts_to_review !== "number" ||
+    !Array.isArray(data.needs_attention) ||
+    !Array.isArray(data.recent_movements) ||
+    typeof data.generated_at !== "string"
+  ) {
+    throw new Error(
+      "The dashboard API returned an unexpected response.",
+    );
+  }
+
+  return data as unknown as DashboardSummary;
 }
 
-async function fetchInventorySummary(signal: AbortSignal): Promise<InventorySummary> {
-  const pageSize = 100;
-  const rows: InventoryRow[] = [];
-  let total = -1;
-  // Fetch the entire paginated inventory; never present page-one numbers as overall KPIs.
-  for (let page = 1; page <= 1000; page += 1) {
-    const data = await getJson(`/inventory?page=${page}&pageSize=${pageSize}`, signal);
-    if (!isObject(data) || !Array.isArray(data.items) || typeof data.total !== "number" || !Number.isSafeInteger(data.total) || data.total < 0) {
-      throw new Error("The inventory API returned an unexpected page.");
-    }
-    if (total !== -1 && total !== data.total) {
-      throw new Error("Inventory changed while the dashboard loaded. Refresh to get a consistent summary.");
-    }
-    total = data.total;
-    rows.push(...data.items.map(parseInventoryRow));
-    if (rows.length >= total) {
-      const attention = rows.filter(row => row.stock_status !== "IN_STOCK")
-        .sort((a, b) => Number(a.stock_status === "LOW_STOCK") - Number(b.stock_status === "LOW_STOCK") || a.name.localeCompare(b.name));
-      return {
-        stockedProducts: new Set(rows.map(row => row.product_id)).size,
-        totalUnits: rows.reduce((sum, row) => sum + row.quantity, 0),
-        lowStock: rows.filter(row => row.stock_status === "LOW_STOCK").length,
-        outOfStock: rows.filter(row => row.stock_status === "OUT_OF_STOCK").length,
-        attention: attention.slice(0, 10),
-      };
-    }
-    if (data.items.length === 0) throw new Error("Inventory pagination ended unexpectedly.");
-  }
-  throw new Error("Too many inventory pages to summarize in the browser.");
+function greeting(): string {
+  const hour = new Date().getHours();
+
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+
+  return "Good evening";
 }
 
-function parseMovementRow(value: unknown): MovementRow {
-  if (!isObject(value) || typeof value.movement_id !== "string" || typeof value.created_at !== "string" ||
-      typeof value.movement_type !== "string" || typeof value.quantity_change !== "string" ||
-      !isObject(value.product) || typeof value.product.name !== "string" || typeof value.product.sku !== "string" ||
-      !isObject(value.location) || typeof value.location.name !== "string" ||
-      !isObject(value.user) || typeof value.user.name !== "string" ||
-      (value.second_location != null && (!isObject(value.second_location) || typeof value.second_location.name !== "string"))) {
-    throw new Error("The movements API returned an unexpected record.");
-  }
-  return {
-    movement_id: value.movement_id,
-    created_at: value.created_at,
-    movement_type: value.movement_type,
-    quantity_change: value.quantity_change,
-    product: { name: value.product.name, sku: value.product.sku },
-    location: { name: value.location.name },
-    second_location: value.second_location ? { name: (value.second_location as RecordObject).name as string } : null,
-    user: { name: value.user.name },
-    notes: typeof value.notes === "string" ? value.notes : null,
-    reason: typeof value.reason === "string" ? value.reason : null,
-  };
-}
+function formatDate(
+  value: string,
+  timeZone = "Africa/Johannesburg",
+): string {
+  const date = new Date(value);
 
-async function fetchRecentMovements(signal: AbortSignal): Promise<MovementRow[]> {
-  const data = await getJson("/stock-movements?page=1&pageSize=8", signal);
-  if (!isObject(data) || !Array.isArray(data.items)) throw new Error("The movements API returned an unexpected response.");
-  return data.items.map(parseMovementRow);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone,
+  });
 }
 
 function movementName(type: string): string {
   const names: Record<string, string> = {
-    ADJUSTMENT: "Adjustment", ADJUST_IN: "Adjustment in", ADJUST_OUT: "Adjustment out",
-    TRANSFER_IN: "Transfer in", TRANSFER_OUT: "Transfer out", COUNT: "Stock count",
-    IN: "Stock in", OUT: "Stock out", RECEIPT: "Receipt",
+    ADJUSTMENT: "Adjustment",
+    ADJUST_IN: "Adjustment in",
+    ADJUST_OUT: "Adjustment out",
+    TRANSFER_IN: "Transfer in",
+    TRANSFER_OUT: "Transfer out",
+    COUNT: "Stock count",
+    COUNT_VARIANCE: "Count variance",
+    IN: "Stock in",
+    OUT: "Stock out",
+    RECEIPT: "Receipt",
+    SALE: "Sale",
+    CUSTOMER_RETURN: "Customer return",
+    WRITE_OFF: "Write-off",
   };
-  return names[type] ?? type.toLowerCase().replace(/_/g, " ").replace(/^./, c => c.toUpperCase());
+
+  return (
+    names[type] ??
+    type.toLowerCase().replace(/_/g, " ")
+  );
 }
 
-function formatSigned(value: string): string {
-  const number = Number(value);
-  return Number.isFinite(number) ? `${number > 0 ? "+" : ""}${formatQuantity(number)}` : value;
-}
+function formatSigned(value: number): string {
+  if (!Number.isFinite(value)) return "—";
 
-function formatDate(value: string): string {
-  const timestamp = new Date(value);
-  return Number.isNaN(timestamp.getTime()) ? value : timestamp.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  return `${value > 0 ? "+" : ""}${formatQuantity(value)}`;
 }
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const [revision, setRevision] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [inventory, setInventory] = useState<InventorySummary | null>(null);
-  const [movements, setMovements] = useState<MovementRow[]>([]);
-  const [inventoryError, setInventoryError] = useState("");
-  const [movementError, setMovementError] = useState("");
 
+  const role = user?.roleName ?? null;
+
+  const canManageStock =
+    role === "Manager" ||
+    role === "Inventory Staff";
+
+  const canChooseLocation =
+    role === "Manager" ||
+    role === "Viewer";
+
+  const firstName =
+    user?.firstName?.trim() ||
+    user?.username ||
+    "there";
+
+  const [summary, setSummary] =
+    useState<DashboardSummary | null>(null);
+
+  const [locations, setLocations] =
+    useState<LocationOption[]>([]);
+
+  const [selectedLocationId, setSelectedLocationId] =
+    useState("");
+
+  const [locationsError, setLocationsError] =
+    useState("");
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [revision, setRevision] = useState(0);
+
+  const [lastUpdated, setLastUpdated] =
+    useState<string | null>(null);
+
+  // Load active warehouse options for Managers and Viewers.
+  useEffect(() => {
+    if (!canChooseLocation) return;
+
+    const controller = new AbortController();
+    let active = true;
+
+    getLocations(controller.signal)
+      .then((result) => {
+        if (!active) return;
+
+        setLocations(result);
+        setLocationsError("");
+      })
+      .catch((reason: unknown) => {
+        if (!active) return;
+
+        if (
+          reason instanceof Error &&
+          reason.name === "AbortError"
+        ) {
+          return;
+        }
+
+        setLocationsError(
+          reason instanceof Error
+            ? reason.message
+            : "Unable to load warehouse options.",
+        );
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [canChooseLocation]);
+
+  // Load dashboard data for the selected warehouse.
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
-    void Promise.allSettled([
-      fetchInventorySummary(controller.signal),
-      fetchRecentMovements(controller.signal),
-    ]).then(([inventoryResult, movementResult]) => {
-      if (!active) return;
-      if (inventoryResult.status === "fulfilled") {
-        setInventory(inventoryResult.value);
-        setInventoryError("");
-      } else {
-        setInventory(null);
-        setInventoryError(inventoryResult.reason instanceof Error ? inventoryResult.reason.message : "Unable to load inventory summary.");
-      }
-      if (movementResult.status === "fulfilled") {
-        setMovements(movementResult.value);
-        setMovementError("");
-      } else {
-        setMovements([]);
-        setMovementError(movementResult.reason instanceof Error ? movementResult.reason.message : "Unable to load recent movements.");
-      }
-      setLoading(false);
-    });
-    return () => { active = false; controller.abort(); };
-  }, [revision]);
+
+    getDashboardSummary(
+      controller.signal,
+      canChooseLocation ? selectedLocationId : "",
+    )
+      .then((result) => {
+        if (!active) return;
+
+        setSummary(result);
+        setLastUpdated(result.generated_at);
+        setError("");
+      })
+      .catch((reason: unknown) => {
+        if (!active) return;
+
+        if (
+          reason instanceof Error &&
+          reason.name === "AbortError"
+        ) {
+          return;
+        }
+
+        setError(
+          reason instanceof Error
+            ? reason.message
+            : "Unable to load dashboard data.",
+        );
+      })
+      .finally(() => {
+        if (active) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [revision, selectedLocationId, canChooseLocation]);
 
   function refresh() {
     if (loading) return;
+
     setLoading(true);
-    setRevision(value => value + 1);
+    setError("");
+    setRevision((value) => value + 1);
+  }
+
+  function changeLocation(locationId: string) {
+    if (locationId === selectedLocationId) return;
+
+    setLoading(true);
+    setError("");
+    setSelectedLocationId(locationId);
   }
 
   return (
     <AppLayout>
       <PageHeader
         title="Dashboard"
-        subtitle={`Inventory overview${user?.username ? ` · ${user.username}` : ""}`}
-        actions={<button className="btn btn-secondary" type="button" onClick={refresh} disabled={loading}>{loading ? "Refreshing..." : "Refresh"}</button>}
+        subtitle={`${greeting()}, ${firstName}. Here's your operational overview.`}
+        actions={
+          <button
+            className="btn btn-secondary"
+            type="button"
+            onClick={refresh}
+            disabled={loading}
+          >
+            {loading ? "Refreshing..." : "Refresh"}
+          </button>
+        }
       />
 
-      <div className="stat-grid" aria-busy={loading}>
-        <StatCard label="Active products" value={inventory ? formatQuantity(inventory.stockedProducts) : "—"} />
-        <StatCard label="Total stock units" value={inventory ? formatQuantity(inventory.totalUnits) : "—"} />
-        <StatCard label="Low-stock entries" value={inventory ? formatQuantity(inventory.lowStock) : "—"} />
-        <StatCard label="Out-of-stock entries" value={inventory ? formatQuantity(inventory.outOfStock) : "—"} />
-      </div>
-      <p style={{ marginTop: "var(--space-2)", opacity: 0.75, fontSize: "0.875rem" }}>
-        Stock totals are summed across recorded product–location inventory entries. Low/out-of-stock figures count entries, not unique products.
-      </p>
-      {loading && <p role="status">Loading dashboard data...</p>}
-      {!loading && inventoryError && <p role="alert">Inventory summary unavailable: {inventoryError}</p>}
+      {canChooseLocation && (
+        <div
+          style={{
+            marginBottom: "var(--space-3)",
+            maxWidth: "360px",
+          }}
+        >
+          <label
+            htmlFor="dashboard-location"
+            style={{
+              display: "block",
+              marginBottom: "var(--space-1)",
+              fontWeight: 600,
+            }}
+          >
+            Warehouse
+          </label>
 
-      <div style={{ display: "flex", gap: "var(--space-3)", flexWrap: "wrap", margin: "var(--space-4) 0" }}>
-        <Link to="/inventory_overview" className="btn btn-secondary">View inventory</Link>
-        <Link to="/stock_movement_history" className="btn btn-secondary">Full movement history</Link>
-        <Link to="/inventory_count" className="btn btn-secondary">Stock counts</Link>
-      </div>
+          <select
+            id="dashboard-location"
+            value={selectedLocationId}
+            onChange={(event) =>
+              changeLocation(event.target.value)
+            }
+            disabled={loading || locations.length === 0}
+            className="form-control"
+            style={{
+              width: "100%",
+              minHeight: "42px",
+            }}
+          >
+            <option value="">All warehouses</option>
 
-      <Card title="Inventory Attention">
-        {!loading && !inventoryError && inventory && inventory.attention.length === 0 &&
-          <p role="status">No low-stock or out-of-stock inventory entries need attention.</p>}
-        {!loading && !inventoryError && inventory && inventory.attention.length > 0 && (
-          <div className="table-wrap" style={{ overflowX: "auto" }}>
-            <DataTable
-              columns={[
-                { header: "Product", render: (row: InventoryRow) => row.name },
-                { header: "SKU", render: (row: InventoryRow) => row.sku, mono: true },
-                { header: "Location", render: (row: InventoryRow) => row.location_name },
-                { header: "Quantity", render: (row: InventoryRow) => formatQuantity(row.quantity), mono: true },
-                { header: "Reorder level", render: (row: InventoryRow) => formatQuantity(row.reorder_level), mono: true },
-                { header: "Status", render: (row: InventoryRow) => <Badge status={row.stock_status === "OUT_OF_STOCK" ? "out" : "low"}>{row.stock_status === "OUT_OF_STOCK" ? "OUT OF STOCK" : "LOW STOCK"}</Badge> },
-              ]}
-              rows={inventory.attention}
-              keyField={(row: InventoryRow) => `${row.product_id}:${row.location_name}`}
-            />
-          </div>
-        )}
-        {!loading && inventory && inventory.attention.length > 0 && <p style={{ marginTop: "var(--space-2)" }}>Showing up to 10 entries requiring attention. <Link to="/inventory_overview">See all inventory</Link>.</p>}
-      </Card>
+            {locations.map((location) => (
+              <option
+                key={location.location_id}
+                value={location.location_id}
+              >
+                {location.name}
+              </option>
+            ))}
+          </select>
 
-      <div style={{ marginTop: "var(--space-4)" }}>
-        <Card title="Recent Stock Movements">
-          {!loading && movementError && <p role="alert">Recent movements unavailable: {movementError}</p>}
-          {!loading && !movementError && movements.length === 0 && <p role="status">No stock movements have been recorded yet.</p>}
-          {!loading && !movementError && movements.length > 0 && (
-            <div className="table-wrap" style={{ overflowX: "auto" }}>
-              <DataTable
-                columns={[
-                  { header: "Date & time", render: (row: MovementRow) => formatDate(row.created_at) },
-                  { header: "Type", render: (row: MovementRow) => movementName(row.movement_type) },
-                  { header: "Product", render: (row: MovementRow) => `${row.product.name} (${row.product.sku})` },
-                  { header: "Location(s)", render: (row: MovementRow) => row.second_location ? `${row.location.name} / ${row.second_location.name}` : row.location.name },
-                  { header: "Change", render: (row: MovementRow) => formatSigned(row.quantity_change), mono: true },
-                  { header: "Who", render: (row: MovementRow) => row.user.name },
-                  { header: "Note", render: (row: MovementRow) => row.notes || row.reason || "—" },
-                ]}
-                rows={movements}
-                keyField={(row: MovementRow) => row.movement_id}
-              />
-            </div>
+          {locationsError && (
+            <p role="alert" style={{ marginTop: "var(--space-1)" }}>
+              {locationsError}
+            </p>
           )}
-          <p style={{ marginTop: "var(--space-2)" }}><Link to="/stock_movement_history">Open complete stock movement history</Link></p>
-        </Card>
+        </div>
+      )}
+
+      {!canChooseLocation && role === "Inventory Staff" && (
+        <p
+          style={{
+            marginBottom: "var(--space-3)",
+            fontSize: "0.875rem",
+            opacity: 0.75,
+          }}
+        >
+          Showing your assigned warehouse.
+        </p>
+      )}
+
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "var(--space-2)",
+          marginBottom: "var(--space-3)",
+        }}
+      >
+        <span style={{ fontSize: "0.875rem", opacity: 0.75 }}>
+          Operational summary
+        </span>
+
+        <span
+          style={{ fontSize: "0.875rem", opacity: 0.75 }}
+          aria-live="polite"
+        >
+          {lastUpdated
+            ? `Last updated: ${formatDate(
+                lastUpdated,
+                summary?.time_zone,
+              )}`
+            : "Not yet updated"}
+        </span>
       </div>
+
+      <div
+        className="stat-grid"
+        aria-busy={loading}
+      >
+        <StatCard
+          label="Units on hand"
+          value={
+            summary
+              ? formatQuantity(summary.units_on_hand)
+              : "—"
+          }
+        />
+
+        <StatCard
+          label="Low-stock lines"
+          value={
+            summary
+              ? formatQuantity(summary.low_stock)
+              : "—"
+          }
+        />
+
+        <StatCard
+          label="Out-of-stock lines"
+          value={
+            summary
+              ? formatQuantity(summary.out_of_stock)
+              : "—"
+          }
+        />
+
+        <StatCard
+          label="Counts to review"
+          value={
+            summary
+              ? formatQuantity(summary.counts_to_review)
+              : "—"
+          }
+        />
+
+        <StatCard
+          label="Movements today"
+          value={
+            summary
+              ? formatQuantity(summary.movements_today)
+              : "—"
+          }
+        />
+      </div>
+
+      <p
+        style={{
+          marginTop: "var(--space-2)",
+          opacity: 0.75,
+          fontSize: "0.875rem",
+        }}
+      >
+        Stock figures are calculated across active product-location
+        lines. Low-stock and out-of-stock figures count inventory
+        lines, not unique products.
+      </p>
+
+      {loading && (
+        <p role="status">
+          Loading dashboard data...
+        </p>
+      )}
+
+      {!loading && error && (
+        <div role="alert">
+          <p>Dashboard unavailable: {error}</p>
+
+          <button
+            className="btn btn-secondary"
+            type="button"
+            onClick={refresh}
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
+      {!error && (
+        <>
+          <div
+            style={{
+              display: "flex",
+              gap: "var(--space-3)",
+              flexWrap: "wrap",
+              margin: "var(--space-4) 0",
+            }}
+          >
+            <Link
+              to="/inventory_overview"
+              className="btn btn-secondary"
+            >
+              View inventory
+            </Link>
+
+            {canManageStock && (
+              <Link
+                to="/inventory_count"
+                className="btn btn-secondary"
+              >
+                Stock counts
+              </Link>
+            )}
+
+            <Link
+              to="/stock_movement_history"
+              className="btn btn-secondary"
+            >
+              Movement history
+            </Link>
+          </div>
+
+          <Card title="Needs Attention">
+            {!loading &&
+              summary &&
+              summary.needs_attention.length === 0 && (
+                <p role="status">
+                  No low-stock or out-of-stock inventory
+                  lines need attention.
+                </p>
+              )}
+
+            {!loading &&
+              summary &&
+              summary.needs_attention.length > 0 && (
+                <>
+                  <div
+                    className="table-wrap"
+                    style={{ overflowX: "auto" }}
+                  >
+                    <DataTable
+                      columns={[
+                        {
+                          header: "Product",
+                          render: (row: AttentionRow) =>
+                            row.product_name,
+                        },
+                        {
+                          header: "SKU",
+                          render: (row: AttentionRow) =>
+                            row.sku,
+                          mono: true,
+                        },
+                        {
+                          header: "Location",
+                          render: (row: AttentionRow) =>
+                            row.location_name,
+                        },
+                        {
+                          header: "Quantity",
+                          render: (row: AttentionRow) =>
+                            formatQuantity(row.quantity),
+                          mono: true,
+                        },
+                        {
+                          header: "Reorder level",
+                          render: (row: AttentionRow) =>
+                            formatQuantity(row.reorder_level),
+                          mono: true,
+                        },
+                        {
+                          header: "Suggested quantity",
+                          render: (row: AttentionRow) =>
+                            formatQuantity(
+                              row.suggested_quantity,
+                            ),
+                          mono: true,
+                        },
+                        {
+                          header: "Status",
+                          render: (row: AttentionRow) => (
+                            <Badge
+                              status={
+                                row.stock_status === "OUT"
+                                  ? "out"
+                                  : "low"
+                              }
+                            >
+                              {row.stock_status === "OUT"
+                                ? "OUT OF STOCK"
+                                : "LOW STOCK"}
+                            </Badge>
+                          ),
+                        },
+                      ]}
+                      rows={summary.needs_attention}
+                      keyField={(row: AttentionRow) =>
+                        `${row.product_id}:${row.location_id}`
+                      }
+                    />
+                  </div>
+
+                  <p
+                    style={{
+                      marginTop: "var(--space-2)",
+                    }}
+                  >
+                    Suggested quantity indicates the amount
+                    needed to reach the current reorder level.
+                    {" "}
+                    <Link to="/inventory_overview">
+                      View inventory
+                    </Link>
+                  </p>
+                </>
+              )}
+          </Card>
+
+          <div style={{ marginTop: "var(--space-4)" }}>
+            <Card title="Stock Counts Awaiting Review">
+              {!loading && summary && (
+                <>
+                  <p>
+                    <strong>
+                      {formatQuantity(summary.counts_to_review)}
+                    </strong>{" "}
+                    count(s) are ready for review.
+                  </p>
+
+                  <p>
+                    {formatQuantity(summary.pending_counts)}{" "}
+                    count(s) are currently open.
+                  </p>
+
+                  {canManageStock && (
+                    <Link
+                      to="/inventory_count"
+                      className="btn btn-secondary"
+                    >
+                      Review stock counts
+                    </Link>
+                  )}
+                </>
+              )}
+            </Card>
+          </div>
+
+          <div style={{ marginTop: "var(--space-4)" }}>
+            <Card title="Recent Stock Movements">
+              {!loading &&
+                summary &&
+                summary.recent_movements.length === 0 && (
+                  <p role="status">
+                    No stock movements have been recorded yet.
+                  </p>
+                )}
+
+              {!loading &&
+                summary &&
+                summary.recent_movements.length > 0 && (
+                  <div
+                    className="table-wrap"
+                    style={{ overflowX: "auto" }}
+                  >
+                    <DataTable
+                      columns={[
+                        {
+                          header: "Date & time",
+                          render: (row: MovementRow) =>
+                            formatDate(
+                              row.created_at,
+                              summary?.time_zone,
+                            ),
+                        },
+                        {
+                          header: "Movement",
+                          render: (row: MovementRow) =>
+                            movementName(row.movement_type),
+                        },
+                        {
+                          header: "Product",
+                          render: (row: MovementRow) =>
+                            `${row.product_name} (${row.sku})`,
+                        },
+                        {
+                          header: "Location",
+                          render: (row: MovementRow) =>
+                            row.location_name,
+                        },
+                        {
+                          header: "Change",
+                          render: (row: MovementRow) =>
+                            formatSigned(row.quantity_change),
+                          mono: true,
+                        },
+                        {
+                          header: "Who",
+                          render: (row: MovementRow) =>
+                            row.user_name,
+                        },
+                      ]}
+                      rows={summary.recent_movements}
+                      keyField={(row: MovementRow) =>
+                        row.movement_id
+                      }
+                    />
+                  </div>
+                )}
+
+              <p style={{ marginTop: "var(--space-2)" }}>
+                <Link to="/stock_movement_history">
+                  Open complete stock movement history
+                </Link>
+              </p>
+            </Card>
+          </div>
+        </>
+      )}
     </AppLayout>
   );
 }
