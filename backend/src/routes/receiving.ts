@@ -1,0 +1,17 @@
+import {Router} from 'express';
+import {requireSession} from '../middleware/requireSession';
+import {customRequireRole} from '../middleware/customRequireRole';
+import {listSuppliers,createSupplier,patchSupplier,listReceipts,getReceipt,createReceipt,replaceReceiptLines,postReceipt} from '../controllers/receivingController';
+export const supplierRouter=Router(), receiptRouter=Router();
+const read=customRequireRole('Manager','Inventory Staff','Viewer');
+const write=customRequireRole('Manager','Inventory Staff');
+supplierRouter.use(requireSession);
+supplierRouter.get('/',read,listSuppliers);
+supplierRouter.post('/',write,createSupplier);
+supplierRouter.patch('/:id',write,patchSupplier);
+receiptRouter.use(requireSession);
+receiptRouter.get('/',read,listReceipts);
+receiptRouter.get('/:id',read,getReceipt);
+receiptRouter.post('/',write,createReceipt);
+receiptRouter.put('/:id/lines',write,replaceReceiptLines);
+receiptRouter.post('/:id/post',write,postReceipt);

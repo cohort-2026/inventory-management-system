@@ -7,6 +7,8 @@ import {
   MapPin,
   ArrowLeftRight,
   Settings,
+  Truck,
+  ClipboardList,
 } from "lucide-react";
 import { useAuth } from "../utils/AuthContext";
 
@@ -17,6 +19,8 @@ const NAV_ITEMS = [
   { label: "Counts", path: "/inventory_count", icon: ClipboardCheck },
   { label: "Locations", path: "/locations", icon: MapPin },
   { label: "Movement History", path: "/movements", icon: ArrowLeftRight },
+  { label: "Suppliers", path: "/suppliers", icon: Truck },
+  { label: "Receiving", path: "/receiving", icon: ClipboardList },
   { label: "Settings", path: "/settings", icon: Settings },
 ];
 

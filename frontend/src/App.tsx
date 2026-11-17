@@ -30,6 +30,9 @@ import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import Locations from "./pages/Locations";
 import Settings from "./pages/Settings";
+import Suppliers from "./pages/Suppliers";
+import Receiving from "./pages/Receiving";
+import ReceivingDetail from "./pages/ReceivingDetail";
 
 function LegacyInventoryRedirect() {
   const location = useLocation();
@@ -172,6 +175,9 @@ function App() {
             element={<LegacyMovementRedirect />}
           />
 
+          <Route path="/suppliers" element={<ProtectedRoute><Suppliers /></ProtectedRoute>} />
+          <Route path="/receiving" element={<ProtectedRoute><Receiving /></ProtectedRoute>} />
+          <Route path="/receiving/:id" element={<ProtectedRoute><ReceivingDetail /></ProtectedRoute>} />
           <Route
             path="/locations"
             element={
