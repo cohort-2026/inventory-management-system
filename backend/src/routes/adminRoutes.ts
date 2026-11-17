@@ -24,11 +24,18 @@ type ManagedUser = {
   status: string;
   roleId: string;
   roleName: SystemRole;
+  homeLocationId: string | null;
+  homeLocationName: string | null;
 };
 
 type RoleRow = {
   roleId: string;
   name: SystemRole;
+};
+
+type LocationRow = {
+  locationId: string;
+  name: string;
 };
 
 const USER_SELECT = `
@@ -39,10 +46,14 @@ const USER_SELECT = `
     u.last_name AS "lastName",
     u.status,
     u.role_id AS "roleId",
-    r.name AS "roleName"
+    r.name AS "roleName",
+    u.home_location_id AS "homeLocationId",
+    l.name AS "homeLocationName"
   FROM public.users AS u
   INNER JOIN public.roles AS r
     ON r.role_id = u.role_id
+  LEFT JOIN public.locations AS l
+    ON l.location_id = u.home_location_id
 `;
 
 // GET /api/admin/users
@@ -160,15 +171,10 @@ router.patch(
     try {
       await client.query('BEGIN');
 
-      // Serialize role changes so two administrators cannot
-      // independently demote the final Managers at once.
       await client.query(
         'SELECT pg_advisory_xact_lock(71243, 1201)',
       );
 
-      // Recheck the acting user's role inside the transaction.
-      // This prevents a concurrent demotion from authorizing
-      // a stale Manager request.
       const actorResult = await client.query<{
         roleName: string;
       }>(
@@ -286,10 +292,14 @@ router.patch(
             c.last_name AS "lastName",
             c.status,
             c.role_id AS "roleId",
-            r.name AS "roleName"
+            r.name AS "roleName",
+            c.home_location_id AS "homeLocationId",
+            l.name AS "homeLocationName"
           FROM changed c
           JOIN public.roles r
             ON r.role_id = c.role_id
+          LEFT JOIN public.locations l
+            ON l.location_id = c.home_location_id
         `,
         [userId, roleId],
       );
@@ -310,6 +320,210 @@ router.patch(
 
       res.status(500).json({
         error: 'Unable to update user role.',
+      });
+    } finally {
+      client.release();
+    }
+  },
+);
+
+// PATCH /api/admin/users/:id/home-location
+router.patch(
+  '/:id/home-location',
+  requireSession,
+  customRequireRole('Manager'),
+  async (
+    req: SessionAuthenticatedRequest,
+    res,
+  ): Promise<void> => {
+    const userId = req.params.id;
+    const body: unknown = req.body;
+
+    if (
+      typeof userId !== 'string' ||
+      !UUID_PATTERN.test(userId)
+    ) {
+      res.status(400).json({
+        error: 'A valid user ID is required.',
+      });
+      return;
+    }
+
+    if (
+      !body ||
+      typeof body !== 'object' ||
+      Array.isArray(body)
+    ) {
+      res.status(400).json({
+        error: 'Request body must be a JSON object.',
+      });
+      return;
+    }
+
+    const fields = Object.keys(body);
+
+    if (
+      fields.length !== 1 ||
+      fields[0] !== 'homeLocationId'
+    ) {
+      res.status(400).json({
+        error: 'Only homeLocationId is permitted.',
+      });
+      return;
+    }
+
+    const homeLocationId = (
+      body as { homeLocationId?: unknown }
+    ).homeLocationId;
+
+    if (
+      typeof homeLocationId !== 'string' ||
+      !UUID_PATTERN.test(homeLocationId)
+    ) {
+      res.status(400).json({
+        error: 'homeLocationId must be a valid warehouse ID.',
+      });
+      return;
+    }
+
+    const client = await dbPool.connect().catch((error) => {
+      console.error('Warehouse assignment connection failed:', error);
+      return null;
+    });
+
+    if (!client) {
+      res.status(503).json({
+        error: 'Warehouse assignment service unavailable.',
+      });
+      return;
+    }
+
+    try {
+      await client.query('BEGIN');
+
+      const actorResult = await client.query<{
+        roleName: string;
+      }>(
+        `
+          SELECT r.name AS "roleName"
+          FROM public.users u
+          JOIN public.roles r
+            ON r.role_id = u.role_id
+          WHERE u.user_id = $1
+            AND u.status = 'active'
+          FOR UPDATE OF u
+        `,
+        [req.authenticatedUser?.id],
+      );
+
+      if (actorResult.rows[0]?.roleName !== 'Manager') {
+        await client.query('ROLLBACK');
+        res.status(403).json({
+          error: 'Manager permission is required.',
+        });
+        return;
+      }
+
+      const targetResult = await client.query<{
+        id: string;
+        roleName: string;
+      }>(
+        `
+          SELECT
+            u.user_id AS id,
+            r.name AS "roleName"
+          FROM public.users u
+          JOIN public.roles r
+            ON r.role_id = u.role_id
+          WHERE u.user_id = $1
+          FOR UPDATE OF u
+        `,
+        [userId],
+      );
+
+      const target = targetResult.rows[0];
+
+      if (!target) {
+        await client.query('ROLLBACK');
+        res.status(404).json({
+          error: 'User not found.',
+        });
+        return;
+      }
+
+      if (target.roleName !== 'Inventory Staff') {
+        await client.query('ROLLBACK');
+        res.status(409).json({
+          error:
+            'A home warehouse can only be assigned to Inventory Staff.',
+        });
+        return;
+      }
+
+      const locationResult = await client.query<LocationRow>(
+        `
+          SELECT
+            location_id AS "locationId",
+            name
+          FROM public.locations
+          WHERE location_id = $1
+            AND status = 'active'
+        `,
+        [homeLocationId],
+      );
+
+      const location = locationResult.rows[0];
+
+      if (!location) {
+        await client.query('ROLLBACK');
+        res.status(404).json({
+          error: 'The selected active warehouse was not found.',
+        });
+        return;
+      }
+
+      const updated = await client.query<ManagedUser>(
+        `
+          UPDATE public.users u
+          SET home_location_id = $2
+          FROM public.roles r
+          LEFT JOIN public.locations l
+            ON l.location_id = $2
+          WHERE u.user_id = $1
+            AND r.role_id = u.role_id
+          RETURNING
+            u.user_id AS id,
+            u.email,
+            u.first_name AS "firstName",
+            u.last_name AS "lastName",
+            u.status,
+            u.role_id AS "roleId",
+            r.name AS "roleName",
+            u.home_location_id AS "homeLocationId",
+            l.name AS "homeLocationName"
+        `,
+        [userId, homeLocationId],
+      );
+
+      await client.query('COMMIT');
+
+      res.status(200).json({
+        user: updated.rows[0],
+      });
+    } catch (error) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        console.error(
+          'Warehouse assignment rollback failed:',
+          rollbackError,
+        );
+      }
+
+      console.error('Warehouse assignment failed:', error);
+
+      res.status(500).json({
+        error: 'Unable to assign the home warehouse.',
       });
     } finally {
       client.release();
