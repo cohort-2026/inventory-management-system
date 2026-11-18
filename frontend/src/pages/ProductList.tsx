@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import AppLayout from '../components/AppLayout';
+import { useAuth } from '../utils/AuthContext';
 import PageHeader from '../components/PageHeader';
 import DataTable from '../components/DataTable';
 import Pagination from '../components/Pagination';
@@ -43,6 +44,8 @@ const API_URL =
 const PAGE_SIZE = 20;
 
 export default function ProductList() {
+  const { user } = useAuth();
+  const isManager = user?.roleName === 'Manager';
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState('');
   const [status, setStatus] =
@@ -253,225 +256,220 @@ export default function ProductList() {
 
   return (
     <AppLayout>
-      <PageHeader
-        title="Products"
-        actions={
-          <Link
-            to="/products/new"
-            className="btn btn-primary"
-          >
-            + Create Product
-          </Link>
-        }
-      />
+      <div className="product-list-page">
+        <PageHeader
+          title="Products"
+          actions={
+            <Link
+              to="/products/new"
+              className="btn btn-primary"
+            >
+              + Create Product
+            </Link>
+          }
+        />
 
-      <div
-        className="filter-bar"
-        role="search"
-      >
-        <div style={{ flex: '1 1 260px' }}>
-          <label
-            className="field-label"
-            htmlFor="product-search"
-          >
-            Search products
-          </label>
-
-          <input
-            id="product-search"
-            className="field-input"
-            type="search"
-            placeholder="Search by name or SKU..."
-            value={search}
-            onChange={(event) => {
-              setSearch(event.target.value);
-              setPage(1);
-            }}
-          />
-        </div>
-
-        <div style={{ minWidth: 180 }}>
-          <label
-            className="field-label"
-            htmlFor="product-status"
-          >
-            Product status
-          </label>
-
-          <select
-            id="product-status"
-            className="field-select"
-            value={status}
-            onChange={(event) => {
-              setStatus(
-                event.target.value as StatusFilter,
-              );
-              setPage(1);
-            }}
-          >
-            <option value="active">Active</option>
-            <option value="archived">Archived</option>
-            <option value="all">All statuses</option>
-          </select>
-        </div>
-
-        <div style={{ alignSelf: 'end' }}>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={resetFilters}
-          >
-            Clear Filters
-          </button>
-        </div>
-      </div>
-
-      {error && (
-        <p
-          className="field-error"
-          role="alert"
-          style={{
-            marginBottom: 'var(--space-4)',
-          }}
-        >
-          {error}
-        </p>
-      )}
-
-      {!loading && categoriesError && (
-        <p
-          className="field-error"
-          role="status"
-        >
-          Category names could not be loaded. Some products may show as
-          Uncategorised.
-        </p>
-      )}
-
-      {loading ? (
         <div
-          className="card card-body"
-          role="status"
-          aria-live="polite"
+          className="filter-bar"
+          role="search"
         >
-          Loading products...
+          <div className="product-list-search-field">
+            <label
+              className="field-label"
+              htmlFor="product-search"
+            >
+              Search products
+            </label>
+
+            <input
+              id="product-search"
+              className="field-input"
+              type="search"
+              placeholder="Search by name or SKU..."
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setPage(1);
+              }}
+            />
+          </div>
+
+          <div className="product-list-status-field">
+            <label
+              className="field-label"
+              htmlFor="product-status"
+            >
+              Product status
+            </label>
+
+            <select
+              id="product-status"
+              className="field-select"
+              value={status}
+              onChange={(event) => {
+                setStatus(
+                  event.target.value as StatusFilter,
+                );
+                setPage(1);
+              }}
+            >
+              <option value="active">Active</option>
+              <option value="archived">Archived</option>
+              <option value="all">All statuses</option>
+            </select>
+          </div>
+
+          <div style={{ alignSelf: 'end' }} className="product-list-filter-actions">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={resetFilters}
+            >
+              Clear Filters
+            </button>
+          </div>
         </div>
-      ) : !error ? (
-        <>
-          <DataTable
-            columns={[
-              {
-                header: 'Product',
-                render: (product) => (
-                  <Link
-                    to={`/products/${encodeURIComponent(
-                      product.product_id,
-                    )}`}
-                  >
-                    {product.name}
-                  </Link>
-                ),
-              },
-              {
-                header: 'SKU',
-                render: (product) => product.sku,
-                mono: true,
-              },
-              {
-                header: 'Category',
-                render: (product) =>
-                  getCategoryName(product.category_id),
-              },
-              {
-                header: 'Unit',
-                render: (product) =>
-                  product.unit_of_measure,
-              },
-              {
-                header: 'Reorder Level',
-                render: (product) =>
-                  product.reorder_level,
-                mono: true,
-              },
-              {
-                header: 'Status',
-                render: (product) =>
-                  product.status === 'active'
-                    ? 'Active'
-                    : 'Archived',
-              },
-              {
-                header: 'Actions',
-                render: (product) => (
-                  <div
-                    style={{
-                      display: 'flex',
-                      gap: '8px',
-                      flexWrap: 'wrap',
-                    }}
-                  >
+
+        {error && (
+          <p
+            className="field-error"
+            role="alert"
+          >
+            {error}
+          </p>
+        )}
+
+        {!loading && categoriesError && (
+          <p
+            className="field-error"
+            role="status"
+          >
+            Category names could not be loaded. Some products may show as
+            Uncategorised.
+          </p>
+        )}
+
+        {loading ? (
+          <div
+            className="card card-body"
+            role="status"
+            aria-live="polite"
+          >
+            Loading products...
+          </div>
+        ) : !error ? (
+          <>
+            <DataTable
+              columns={[
+                {
+                  header: 'Product',
+                  render: (product) => (
                     <Link
                       to={`/products/${encodeURIComponent(
                         product.product_id,
                       )}`}
-                      className="btn btn-primary btn-sm"
                     >
-                      View Details
+                      {product.name}
                     </Link>
+                  ),
+                },
+                {
+                  header: 'SKU',
+                  render: (product) => product.sku,
+                  mono: true,
+                },
+                {
+                  header: 'Category',
+                  render: (product) =>
+                    getCategoryName(product.category_id),
+                },
+                {
+                  header: 'Unit',
+                  render: (product) =>
+                    product.unit_of_measure,
+                },
+                {
+                  header: 'Reorder Level',
+                  render: (product) =>
+                    product.reorder_level,
+                  mono: true,
+                },
+                {
+                  header: 'Status',
+                  render: (product) =>
+                    product.status === 'active'
+                      ? 'Active'
+                      : 'Archived',
+                },
+                {
+                  header: 'Actions',
+                  render: (product) => (
+                    <div className="product-row-actions">
+                      <Link
+                        to={`/products/${encodeURIComponent(
+                          product.product_id,
+                        )}`}
+                        className="btn btn-primary btn-sm"
+                      >
+                        View Details
+                      </Link>
 
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => setSelectedProduct(product)}
-                    >
-                      Edit
-                    </button>
-                  </div>
-                ),
-              },
-            ]}
-            rows={products}
-            keyField={(product) =>
-              product.product_id
-            }
-          />
+                      {isManager && (
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => setSelectedProduct(product)}
+                        >
+                          Edit
+                        </button>
+                      )}
+                    </div>
+                  ),
+                },
+              ]}
+              rows={products}
+              keyField={(product) =>
+                product.product_id
+              }
+            />
 
-          {products.length === 0 && (
-            <p
-              className="table-empty"
-              role="status"
-            >
-              No products match your search
-              or selected filters.
+            {products.length === 0 && (
+              <p
+                className="table-empty"
+                role="status"
+              >
+                No products match your search
+                or selected filters.
+              </p>
+            )}
+
+            <p className="table-note">
+              Showing {firstItem}–{lastItem} of {total}
             </p>
-          )}
 
-          <p className="table-note">
-            Showing {firstItem}–{lastItem} of {total}
-          </p>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onChange={setPage}
+            />
+          </>
+        ) : null}
 
-          <Pagination
-            page={page}
-            totalPages={totalPages}
-            onChange={setPage}
+        {isManager && selectedProduct && (
+          <EditProductModal
+            key={selectedProduct.product_id}
+            product={selectedProduct}
+            categories={categories}
+            categoriesLoading={categoriesLoading}
+            categoriesError={categoriesError}
+            onClose={() => setSelectedProduct(null)}
+            onSaved={() => {
+              setSelectedProduct(null);
+              setRefreshKey((current) => current + 1);
+            }}
           />
-        </>
-      ) : null}
-
-      {selectedProduct && (
-        <EditProductModal
-          key={selectedProduct.product_id}
-          product={selectedProduct}
-          categories={categories}
-          categoriesLoading={categoriesLoading}
-          categoriesError={categoriesError}
-          onClose={() => setSelectedProduct(null)}
-          onSaved={() => {
-            setSelectedProduct(null);
-            setRefreshKey((current) => current + 1);
-          }}
-        />
-      )}
+        )}
+      </div>
     </AppLayout>
   );
 }

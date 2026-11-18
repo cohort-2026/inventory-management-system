@@ -1,8 +1,25 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import {
+  Archive,
+  ArrowDownLeft,
+  ArrowLeft,
+  ArrowLeftRight,
+  ArrowUpRight,
+  Boxes,
+  CalendarClock,
+  ClipboardCheck,
+  Package,
+  Pencil,
+  RefreshCw,
+  Warehouse,
+} from "lucide-react";
 
 import AppLayout from "../components/AppLayout";
+import EditProductModal from "../components/EditProductModal";
+import type { EditableProduct } from "../components/EditProductModal";
+import type { ProductCategory } from "../components/ProductForm";
 import { getProductDetails } from "../services/api";
 import type {
   ProductDetailResponse,
@@ -51,6 +68,10 @@ export default function ProductDetails() {
   const [archiving, setArchiving] = useState(false);
   const [actionMessage, setActionMessage] = useState("");
   const [actionError, setActionError] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [categories, setCategories] = useState<ProductCategory[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [categoriesError, setCategoriesError] = useState("");
 
   const isManager = user?.roleName === "Manager";
 
@@ -126,6 +147,94 @@ export default function ProductDetails() {
     };
   }, [id, retryCount]);
 
+  useEffect(() => {
+    if (!editing) return;
+
+    const controller = new AbortController();
+
+    async function loadCategories(): Promise<void> {
+      setCategoriesLoading(true);
+      setCategoriesError("");
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/categories`, {
+          credentials: "include",
+          signal: controller.signal,
+          headers: { Accept: "application/json" },
+        });
+
+        const data: unknown = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          const message =
+            typeof data === "object" &&
+            data !== null &&
+            "error" in data &&
+            typeof data.error === "string"
+              ? data.error
+              : `Unable to load categories (HTTP ${response.status}).`;
+          throw new Error(message);
+        }
+
+        if (
+          typeof data !== "object" ||
+          data === null ||
+          !("items" in data) ||
+          !Array.isArray(data.items)
+        ) {
+          throw new Error("Unexpected categories response.");
+        }
+
+        const validCategories = data.items.filter(
+          (item): item is ProductCategory =>
+            typeof item === "object" &&
+            item !== null &&
+            "category_id" in item &&
+            typeof item.category_id === "string" &&
+            "name" in item &&
+            typeof item.name === "string",
+        );
+
+        if (!controller.signal.aborted) {
+          setCategories(validCategories);
+        }
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setCategoriesError(
+            err instanceof Error ? err.message : "Unable to load categories.",
+          );
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setCategoriesLoading(false);
+        }
+      }
+    }
+
+    void loadCategories();
+    return () => controller.abort();
+  }, [editing]);
+
+  const editableProduct: EditableProduct | null = details
+    ? {
+        product_id: details.product.product_id,
+        category_id: details.product.category_id,
+        name: details.product.name,
+        sku: details.product.sku,
+        description: details.product.description ?? null,
+        unit_of_measure: details.product.unit_of_measure,
+        reorder_level: details.product.reorder_level,
+        status: details.product.status === "archived" ? "archived" : "active",
+      }
+    : null;
+
+  function handleProductSaved(): void {
+    setEditing(false);
+    setActionError("");
+    setActionMessage("Product updated successfully.");
+    void loadProduct();
+  }
+
   async function handleArchive(): Promise<void> {
     if (!id || !details || !isManager) return;
 
@@ -178,148 +287,106 @@ export default function ProductDetails() {
     }
   }
 
+  const product = details?.product;
+  const totalOnHand = details ? Number(details.summary.total_on_hand) : 0;
+  const stockStatus = totalOnHand <= 0 ? "out" : "available";
+  const inventoryLink = product
+    ? `/inventory?search=${encodeURIComponent(product.sku)}`
+    : "/inventory";
+  const historyLink = product
+    ? `/movements?product_id=${encodeURIComponent(product.product_id)}`
+    : "/movements";
+
   return (
     <AppLayout>
-      <main className="page-container">
-        <div className="page-header">
-          <div>
-            <h1>Product Details</h1>
-            <p>
-              Product information, stock by location and movement history.
-            </p>
-          </div>
-
-          <Link to="/product_list" className="button button-secondary">
-            Back to Products
-          </Link>
+      <main className="page-container product-details-page pd-page">
+        <div className="pd-breadcrumbs">
+          <Link to="/product_list"><ArrowLeft size={14} /> Products</Link>
+          <span aria-hidden="true">/</span>
+          <span>Product details</span>
         </div>
 
         {loading && (
-          <section className="card">
-            <p>Loading product details...</p>
-          </section>
+          <div className="pd-state" role="status">
+            <RefreshCw size={20} className="pd-spinner" aria-hidden="true" />
+            Loading product details…
+          </div>
         )}
 
         {!loading && error && (
-          <section className="card">
+          <div className="pd-state" role="alert">
             <h2>Unable to load product</h2>
-            <p role="alert">{error}</p>
-
+            <p>{error}</p>
             <button
               type="button"
-              className="button button-primary"
+              className="btn btn-primary"
               onClick={() => setRetryCount((count) => count + 1)}
             >
-              Try Again
+              Try again
             </button>
-          </section>
+          </div>
         )}
 
-        {!loading && !error && details && (
+        {!loading && !error && details && product && (
           <>
-            <section className="card">
-              <div className="product-details-heading">
-                <div>
-                  <h2>{details.product.name}</h2>
-                  <p>SKU: {details.product.sku}</p>
-                </div>
-
-                <span
-                  className={`status-badge ${
-                    details.product.status === "active"
-                      ? "status-active"
-                      : "status-archived"
-                  }`}
-                >
-                  {details.product.status}
+            <section className="pd-hero" aria-labelledby="pd-product-title">
+              <div className="pd-hero-main">
+                <span className="pd-product-icon" aria-hidden="true">
+                  <Package size={27} strokeWidth={1.7} />
                 </span>
-              </div>
-
-              <div className="product-information-grid">
-                <div>
-                  <span className="detail-label">Category</span>
-                  <strong>
-                    {details.product.category_name || "Uncategorised"}
-                  </strong>
-                </div>
-
-                <div>
-                  <span className="detail-label">Unit of measure</span>
-                  <strong>{details.product.unit_of_measure}</strong>
-                </div>
-
-                <div>
-                  <span className="detail-label">Reorder level</span>
-                  <strong>
-                    {formatQuantity(details.product.reorder_level)}
-                  </strong>
-                </div>
-
-                <div>
-                  <span className="detail-label">Total stock on hand</span>
-                  <strong>
-                    {formatQuantity(details.summary.total_on_hand)}
-                  </strong>
+                <div className="pd-hero-text">
+                  <div className="pd-eyebrow">PRODUCT PROFILE</div>
+                  <h1 id="pd-product-title">{product.name}</h1>
+                  <div className="pd-product-meta">
+                    <span className="pd-sku">SKU: {product.sku}</span>
+                    <span className="pd-meta-separator" aria-hidden="true" />
+                    <span>{product.category_name || "Uncategorised"}</span>
+                    <span
+                      className={`pd-pill ${product.status === "active" ? "pd-pill-active" : "pd-pill-archived"}`}
+                    >
+                      <span className="pd-pill-dot" aria-hidden="true" />
+                      {product.status === "active" ? "Active" : "Archived"}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              {details.product.description && (
-                <div className="product-description">
-                  <span className="detail-label">Description</span>
-                  <p>{details.product.description}</p>
-                </div>
-              )}
-
-              {actionMessage && (
-                <p role="status">{actionMessage}</p>
-              )}
-
-              {actionError && (
-                <p role="alert">{actionError}</p>
-              )}
-
-              {details.product.status === "active" && (
-                <div className="product-actions">
+              {product.status === "active" && (
+                <div className="pd-hero-actions">
                   {canManageStock && (
                     <>
                       <Link
-                        to={`/adjust_stock?product_id=${encodeURIComponent(
-                          details.product.product_id,
-                        )}`}
-                        className="button button-primary"
+                        className="btn btn-primary"
+                        to={`/adjust_stock?product_id=${encodeURIComponent(product.product_id)}`}
                       >
-                        Adjust Stock
+                        <Boxes size={16} aria-hidden="true" /> Adjust stock
                       </Link>
-
                       <Link
-                        to={`/transfer_stock?product_id=${encodeURIComponent(
-                          details.product.product_id,
-                        )}`}
-                        className="button button-secondary"
+                        className="btn btn-secondary"
+                        to={`/transfer_stock?product_id=${encodeURIComponent(product.product_id)}`}
                       >
-                        Transfer Stock
+                        <ArrowLeftRight size={16} aria-hidden="true" /> Transfer
                       </Link>
                     </>
                   )}
-
                   {isManager && (
                     <>
-                      <Link
-                        to={`/product_list?edit=${encodeURIComponent(
-                          details.product.product_id,
-                        )}`}
-                        className="button button-secondary"
-                      >
-                        Edit Product
-                      </Link>
-
                       <button
+                        className="btn btn-secondary"
                         type="button"
-                        className="button button-secondary"
+                        onClick={() => setEditing(true)}
+                        disabled={archiving}
+                      >
+                        <Pencil size={16} aria-hidden="true" /> Edit product
+                      </button>
+                      <button
+                        className="btn btn-secondary pd-archive-action"
+                        type="button"
                         onClick={handleArchive}
                         disabled={archiving}
                       >
-                        {archiving ? "Archiving..." : "Archive Product"}
+                        <Archive size={16} aria-hidden="true" />
+                        {archiving ? "Archiving…" : "Archive"}
                       </button>
                     </>
                   )}
@@ -327,29 +394,117 @@ export default function ProductDetails() {
               )}
             </section>
 
-            <section className="card">
-              <h2>Stock by Location</h2>
-              <p>Stock balances at every active location.</p>
+            {actionMessage && (
+              <p className="pd-feedback pd-feedback-success" role="status">{actionMessage}</p>
+            )}
+            {actionError && (
+              <p className="pd-feedback pd-feedback-error" role="alert">{actionError}</p>
+            )}
 
+            <section className="pd-metrics" aria-label="Product stock summary">
+              <div className="pd-metric pd-metric-primary">
+                <div className="pd-metric-heading">
+                  <span>Total stock on hand</span>
+                  <Boxes size={19} aria-hidden="true" />
+                </div>
+                <strong className="pd-metric-value">
+                  {formatQuantity(details.summary.total_on_hand)}
+                </strong>
+                <div className="pd-metric-footer">
+                  <span className={`pd-availability pd-availability-${stockStatus}`}>
+                    <span className="pd-pill-dot" aria-hidden="true" />
+                    {totalOnHand <= 0 ? "Out of stock" : "Stock available"}
+                  </span>
+                  <span>{product.unit_of_measure}</span>
+                </div>
+              </div>
+              <div className="pd-metric">
+                <div className="pd-metric-heading">
+                  <span>Reorder level</span>
+                  <ClipboardCheck size={19} aria-hidden="true" />
+                </div>
+                <strong className="pd-metric-value">{formatQuantity(product.reorder_level)}</strong>
+                <p className="pd-metric-caption">Minimum configured for this product</p>
+              </div>
+              <div className="pd-metric">
+                <div className="pd-metric-heading">
+                  <span>Active locations</span>
+                  <Warehouse size={19} aria-hidden="true" />
+                </div>
+                <strong className="pd-metric-value">{details.locations.length}</strong>
+                <p className="pd-metric-caption">Locations shown below</p>
+              </div>
+              <div className="pd-metric">
+                <div className="pd-metric-heading">
+                  <span>Recent movements</span>
+                  <ArrowLeftRight size={19} aria-hidden="true" />
+                </div>
+                <strong className="pd-metric-value">{details.recent_movements.length}</strong>
+                <p className="pd-metric-caption">In this recent history view</p>
+              </div>
+            </section>
+
+            <div className="pd-grid">
+              <section className="pd-panel pd-overview" aria-labelledby="pd-overview-heading">
+                <div className="pd-panel-header">
+                  <div>
+                    <span className="pd-section-kicker">MASTER DATA</span>
+                    <h2 id="pd-overview-heading">Product information</h2>
+                  </div>
+                  <Package size={19} className="pd-panel-icon" aria-hidden="true" />
+                </div>
+                <dl className="pd-info-grid">
+                  <div><dt>Category</dt><dd>{product.category_name || "Uncategorised"}</dd></div>
+                  <div><dt>Unit of measure</dt><dd>{product.unit_of_measure}</dd></div>
+                  <div><dt>SKU</dt><dd className="pd-code">{product.sku}</dd></div>
+                  <div><dt>Reorder level</dt><dd>{formatQuantity(product.reorder_level)}</dd></div>
+                </dl>
+                <div className="pd-description">
+                  <h3>Description</h3>
+                  <p>{product.description?.trim() || "No description has been added for this product."}</p>
+                </div>
+              </section>
+
+              <section className="pd-panel pd-activity" aria-labelledby="pd-activity-heading">
+                <div className="pd-panel-header">
+                  <div>
+                    <span className="pd-section-kicker">TIMELINE</span>
+                    <h2 id="pd-activity-heading">Product activity</h2>
+                  </div>
+                  <CalendarClock size={19} className="pd-panel-icon" aria-hidden="true" />
+                </div>
+                <dl className="pd-activity-list">
+                  <div><dt>Last received</dt><dd>{formatDate(details.summary.last_received_at)}</dd></div>
+                  <div><dt>Last stock count</dt><dd>{formatDate(details.summary.last_count_at)}</dd></div>
+                  <div><dt>Created</dt><dd>{formatDate(product.created_at)}</dd></div>
+                  <div><dt>Last updated</dt><dd>{formatDate(product.updated_at)}</dd></div>
+                </dl>
+              </section>
+            </div>
+
+            <section className="pd-panel pd-table-panel" aria-labelledby="pd-locations-heading">
+              <div className="pd-panel-header pd-panel-header-with-action">
+                <div>
+                  <span className="pd-section-kicker">DISTRIBUTION</span>
+                  <h2 id="pd-locations-heading">Stock by location</h2>
+                  <p>Live balances across active locations.</p>
+                </div>
+                <Link to={inventoryLink} className="pd-text-action">
+                  Open inventory <ArrowUpRight size={15} aria-hidden="true" />
+                </Link>
+              </div>
               {details.locations.length === 0 ? (
-                <p>No active locations were found.</p>
+                <div className="pd-empty">No active locations were found.</div>
               ) : (
-                <div className="table-responsive">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Location</th>
-                        <th>Location Code</th>
-                        <th>Quantity</th>
-                      </tr>
-                    </thead>
-
+                <div className="pd-table-scroll">
+                  <table className="data-table pd-table">
+                    <thead><tr><th>Location</th><th>Location code</th><th className="pd-numeric">On hand</th></tr></thead>
                     <tbody>
                       {details.locations.map((location) => (
                         <tr key={location.location_id}>
-                          <td>{location.location_name}</td>
-                          <td>{location.location_code}</td>
-                          <td>{formatQuantity(location.quantity)}</td>
+                          <td><span className="pd-table-primary"><Warehouse size={15} aria-hidden="true" /> {location.location_name}</span></td>
+                          <td><span className="pd-code">{location.location_code}</span></td>
+                          <td className="pd-numeric pd-quantity">{formatQuantity(location.quantity)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -358,50 +513,44 @@ export default function ProductDetails() {
               )}
             </section>
 
-            <section className="card">
-              <h2>Recent Movement History</h2>
-              <p>Latest stock movements recorded for this product.</p>
-
+            <section className="pd-panel pd-table-panel" aria-labelledby="pd-movements-heading">
+              <div className="pd-panel-header pd-panel-header-with-action">
+                <div>
+                  <span className="pd-section-kicker">AUDIT TRAIL</span>
+                  <h2 id="pd-movements-heading">Recent stock movements</h2>
+                  <p>Latest recorded transactions for this product.</p>
+                </div>
+                <Link to={historyLink} className="pd-text-action">
+                  Full history <ArrowUpRight size={15} aria-hidden="true" />
+                </Link>
+              </div>
               {details.recent_movements.length === 0 ? (
-                <p>
-                  No stock movements have been recorded for this product.
-                </p>
+                <div className="pd-empty">No stock movements have been recorded for this product.</div>
               ) : (
-                <div className="table-responsive">
-                  <table className="data-table">
+                <div className="pd-table-scroll">
+                  <table className="data-table pd-table pd-movement-table">
                     <thead>
                       <tr>
-                        <th>Movement</th>
-                        <th>Date</th>
-                        <th>Location</th>
-                        <th>Quantity Change</th>
-                        <th>Balance After</th>
-                        <th>Recorded By</th>
-                        <th>Reason</th>
+                        <th>Movement</th><th>Date</th><th>Location</th>
+                        <th className="pd-numeric">Change</th>
+                        <th className="pd-numeric">Balance after</th>
+                        <th>Recorded by</th><th>Reason</th>
                       </tr>
                     </thead>
-
                     <tbody>
                       {details.recent_movements.map((movement) => (
                         <tr key={movement.movement_id}>
-                          <td>
-                            <Link to="/movements">
-                              {movementLabel(movement)}
-                            </Link>
-                          </td>
+                          <td><Link className="pd-movement-link" to={historyLink}>{movementLabel(movement)}</Link></td>
                           <td>{formatDate(movement.created_at)}</td>
-                          <td>
-                            {movement.location_name || "Not available"}
+                          <td>{movement.location_name || "Not available"}</td>
+                          <td className="pd-numeric">
+                            <span className={`pd-change ${Number(movement.quantity_change) >= 0 ? "pd-change-in" : "pd-change-out"}`}>
+                              {Number(movement.quantity_change) >= 0 ? <ArrowDownLeft size={13} aria-hidden="true" /> : <ArrowUpRight size={13} aria-hidden="true" />}
+                              {Number(movement.quantity_change) > 0 ? "+" : ""}{formatQuantity(movement.quantity_change)}
+                            </span>
                           </td>
-                          <td>
-                            {formatQuantity(movement.quantity_change)}
-                          </td>
-                          <td>
-                            {formatQuantity(movement.quantity_after)}
-                          </td>
-                          <td>
-                            {movement.user_name || "Not available"}
-                          </td>
+                          <td className="pd-numeric pd-quantity">{formatQuantity(movement.quantity_after)}</td>
+                          <td>{movement.user_name || "Not available"}</td>
                           <td>{movement.reason || "Not specified"}</td>
                         </tr>
                       ))}
@@ -410,41 +559,19 @@ export default function ProductDetails() {
                 </div>
               )}
             </section>
-
-            <section className="card">
-              <h2>Product Activity</h2>
-
-              <div className="product-information-grid">
-                <div>
-                  <span className="detail-label">Last received</span>
-                  <strong>
-                    {formatDate(details.summary.last_received_at)}
-                  </strong>
-                </div>
-
-                <div>
-                  <span className="detail-label">Last stock count</span>
-                  <strong>
-                    {formatDate(details.summary.last_count_at)}
-                  </strong>
-                </div>
-
-                <div>
-                  <span className="detail-label">Created</span>
-                  <strong>
-                    {formatDate(details.product.created_at)}
-                  </strong>
-                </div>
-
-                <div>
-                  <span className="detail-label">Last updated</span>
-                  <strong>
-                    {formatDate(details.product.updated_at)}
-                  </strong>
-                </div>
-              </div>
-            </section>
           </>
+        )}
+
+        {editing && isManager && editableProduct && (
+          <EditProductModal
+            key={editableProduct.product_id}
+            product={editableProduct}
+            categories={categories}
+            categoriesLoading={categoriesLoading}
+            categoriesError={categoriesError}
+            onClose={() => setEditing(false)}
+            onSaved={handleProductSaved}
+          />
         )}
       </main>
     </AppLayout>
