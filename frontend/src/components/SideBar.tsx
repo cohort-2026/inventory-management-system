@@ -26,42 +26,41 @@ const NAV_ITEMS = [
 
 export default function Sidebar() {
   const { user } = useAuth();
+
   return (
-    <aside className="app-sidebar">
+    <aside className="app-sidebar enterprise-navy-sidebar">
+
       <div className="sidebar-brand">
-        <span className="sidebar-brand-mark">
+        <span className="sidebar-brand-mark" aria-hidden="true">
           <Boxes size={18} />
         </span>
-        <span>Inventory App</span>
+        <span className="sidebar-brand-name">Inventory App</span>
       </div>
 
       <nav aria-label="Main navigation">
         <p className="sidebar-section-label">WORKSPACE</p>
 
         <ul className="sidebar-nav">
-          {NAV_ITEMS
-            .filter(
-              (item) =>
-                item.path !== "/settings" ||
-                user?.roleName === "Manager"
-            )
-            .map((item) => {
-              const Icon = item.icon;
+          {NAV_ITEMS.filter(
+            (item) =>
+              item.path !== "/settings" || user?.roleName === "Manager"
+          ).map((item) => {
+            const Icon = item.icon;
 
-              return (
-                <li key={item.path}>
-                  <NavLink
-                    to={item.path}
-                    className={({ isActive }) =>
-                      `sidebar-link${isActive ? " active" : ""}`
-                    }
-                  >
-                    <Icon size={18} strokeWidth={1.8} />
-                    <span>{item.label}</span>
-                  </NavLink>
-                </li>
-              );
-            })}
+            return (
+              <li key={item.path}>
+                <NavLink
+                  to={item.path}
+                  className={({ isActive }) =>
+                    `sidebar-link${isActive ? " active" : ""}`
+                  }
+                >
+                  <Icon size={18} strokeWidth={1.8} aria-hidden="true" />
+                  <span>{item.label}</span>
+                </NavLink>
+              </li>
+            );
+          })}
         </ul>
       </nav>
     </aside>

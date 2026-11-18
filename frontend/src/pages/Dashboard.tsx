@@ -389,408 +389,410 @@ export default function Dashboard() {
         }
       />
 
-      {canChooseLocation && (
-        <div
-          style={{
-            marginBottom: "var(--space-3)",
-            maxWidth: "360px",
-          }}
-        >
-          <label
-            htmlFor="dashboard-location"
-            style={{
-              display: "block",
-              marginBottom: "var(--space-1)",
-              fontWeight: 600,
-            }}
-          >
-            Warehouse
-          </label>
-
-          <select
-            id="dashboard-location"
-            value={selectedLocationId}
-            onChange={(event) =>
-              changeLocation(event.target.value)
-            }
-            disabled={loading || locations.length === 0}
-            className="form-control"
-            style={{
-              width: "100%",
-              minHeight: "42px",
-            }}
-          >
-            <option value="">All warehouses</option>
-
-            {locations.map((location) => (
-              <option
-                key={location.location_id}
-                value={location.location_id}
-              >
-                {location.name}
-              </option>
-            ))}
-          </select>
-
-          {locationsError && (
-            <p role="alert" style={{ marginTop: "var(--space-1)" }}>
-              {locationsError}
-            </p>
-          )}
-        </div>
-      )}
-
-      {!canChooseLocation && role === "Inventory Staff" && (
-        <p
-          style={{
-            marginBottom: "var(--space-3)",
-            fontSize: "0.875rem",
-            opacity: 0.75,
-          }}
-        >
-          Showing your assigned warehouse.
-        </p>
-      )}
-
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: "var(--space-2)",
-          marginBottom: "var(--space-3)",
-        }}
-      >
-        <span style={{ fontSize: "0.875rem", opacity: 0.75 }}>
-          Operational summary
-        </span>
-
-        <span
-          style={{ fontSize: "0.875rem", opacity: 0.75 }}
-          aria-live="polite"
-        >
-          {lastUpdated
-            ? `Last updated: ${formatDate(
-                lastUpdated,
-                summary?.time_zone,
-              )}`
-            : "Not yet updated"}
-        </span>
-      </div>
-
-      <div
-        className="stat-grid"
-        aria-busy={loading}
-      >
-        <StatCard
-          label="Units on hand"
-          value={
-            summary
-              ? formatQuantity(summary.units_on_hand)
-              : "—"
-          }
-        />
-
-        <StatCard
-          label="Low-stock lines"
-          value={
-            summary
-              ? formatQuantity(summary.low_stock)
-              : "—"
-          }
-        />
-
-        <StatCard
-          label="Out-of-stock lines"
-          value={
-            summary
-              ? formatQuantity(summary.out_of_stock)
-              : "—"
-          }
-        />
-
-        <StatCard
-          label="Counts to review"
-          value={
-            summary
-              ? formatQuantity(summary.counts_to_review)
-              : "—"
-          }
-        />
-
-        <StatCard
-          label="Movements today"
-          value={
-            summary
-              ? formatQuantity(summary.movements_today)
-              : "—"
-          }
-        />
-      </div>
-
-      <p
-        style={{
-          marginTop: "var(--space-2)",
-          opacity: 0.75,
-          fontSize: "0.875rem",
-        }}
-      >
-        Stock figures are calculated across active product-location
-        lines. Low-stock and out-of-stock figures count inventory
-        lines, not unique products.
-      </p>
-
-      {loading && (
-        <p role="status">
-          Loading dashboard data...
-        </p>
-      )}
-
-      {!loading && error && (
-        <div role="alert">
-          <p>Dashboard unavailable: {error}</p>
-
-          <button
-            className="btn btn-secondary"
-            type="button"
-            onClick={refresh}
-          >
-            Try again
-          </button>
-        </div>
-      )}
-
-      {!error && (
-        <>
+      <div className="enterprise-dashboard">
+        {canChooseLocation && (
           <div
             style={{
-              display: "flex",
-              gap: "var(--space-3)",
-              flexWrap: "wrap",
-              margin: "var(--space-4) 0",
+              marginBottom: "var(--space-3)",
+              maxWidth: "360px",
             }}
           >
-            <Link
-              to="/inventory_overview"
-              className="btn btn-secondary"
+            <label
+              htmlFor="dashboard-location"
+              style={{
+                display: "block",
+                marginBottom: "var(--space-1)",
+                fontWeight: 600,
+              }}
             >
-              View inventory
-            </Link>
+              Warehouse
+            </label>
 
-            {canManageStock && (
+            <select
+              id="dashboard-location"
+              value={selectedLocationId}
+              onChange={(event) =>
+                changeLocation(event.target.value)
+              }
+              disabled={loading || locations.length === 0}
+              className="form-control"
+              style={{
+                width: "100%",
+                minHeight: "42px",
+              }}
+            >
+              <option value="">All warehouses</option>
+
+              {locations.map((location) => (
+                <option
+                  key={location.location_id}
+                  value={location.location_id}
+                >
+                  {location.name}
+                </option>
+              ))}
+            </select>
+
+            {locationsError && (
+              <p role="alert" style={{ marginTop: "var(--space-1)" }}>
+                {locationsError}
+              </p>
+            )}
+          </div>
+        )}
+
+        {!canChooseLocation && role === "Inventory Staff" && (
+          <p
+            style={{
+              marginBottom: "var(--space-3)",
+              fontSize: "0.875rem",
+              opacity: 0.75,
+            }}
+          >
+            Showing your assigned warehouse.
+          </p>
+        )}
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "var(--space-2)",
+            marginBottom: "var(--space-3)",
+          }}
+        >
+          <span style={{ fontSize: "0.875rem", opacity: 0.75 }}>
+            Operational summary
+          </span>
+
+          <span
+            style={{ fontSize: "0.875rem", opacity: 0.75 }}
+            aria-live="polite"
+          >
+            {lastUpdated
+              ? `Last updated: ${formatDate(
+                  lastUpdated,
+                  summary?.time_zone,
+                )}`
+              : "Not yet updated"}
+          </span>
+        </div>
+
+        <div
+          className="stat-grid"
+          aria-busy={loading}
+        >
+          <StatCard
+            label="Units on hand"
+            value={
+              summary
+                ? formatQuantity(summary.units_on_hand)
+                : "—"
+            }
+          />
+
+          <StatCard
+            label="Low-stock lines"
+            value={
+              summary
+                ? formatQuantity(summary.low_stock)
+                : "—"
+            }
+          />
+
+          <StatCard
+            label="Out-of-stock lines"
+            value={
+              summary
+                ? formatQuantity(summary.out_of_stock)
+                : "—"
+            }
+          />
+
+          <StatCard
+            label="Counts to review"
+            value={
+              summary
+                ? formatQuantity(summary.counts_to_review)
+                : "—"
+            }
+          />
+
+          <StatCard
+            label="Movements today"
+            value={
+              summary
+                ? formatQuantity(summary.movements_today)
+                : "—"
+            }
+          />
+        </div>
+
+        <p
+          style={{
+            marginTop: "var(--space-2)",
+            opacity: 0.75,
+            fontSize: "0.875rem",
+          }}
+        >
+          Stock figures are calculated across active product-location
+          lines. Low-stock and out-of-stock figures count inventory
+          lines, not unique products.
+        </p>
+
+        {loading && (
+          <p role="status">
+            Loading dashboard data...
+          </p>
+        )}
+
+        {!loading && error && (
+          <div role="alert">
+            <p>Dashboard unavailable: {error}</p>
+
+            <button
+              className="btn btn-secondary"
+              type="button"
+              onClick={refresh}
+            >
+              Try again
+            </button>
+          </div>
+        )}
+
+        {!error && (
+          <>
+            <div
+              style={{
+                display: "flex",
+                gap: "var(--space-3)",
+                flexWrap: "wrap",
+                margin: "var(--space-4) 0",
+              }}
+            >
               <Link
-                to="/inventory_count"
+                to="/inventory"
                 className="btn btn-secondary"
               >
-                Stock counts
+                View inventory
               </Link>
-            )}
 
-            <Link
-              to="/stock_movement_history"
-              className="btn btn-secondary"
-            >
-              Movement history
-            </Link>
-          </div>
-
-          <Card title="Needs Attention">
-            {!loading &&
-              summary &&
-              summary.needs_attention.length === 0 && (
-                <p role="status">
-                  No low-stock or out-of-stock inventory
-                  lines need attention.
-                </p>
-              )}
-
-            {!loading &&
-              summary &&
-              summary.needs_attention.length > 0 && (
-                <>
-                  <div
-                    className="table-wrap"
-                    style={{ overflowX: "auto" }}
-                  >
-                    <DataTable
-                      columns={[
-                        {
-                          header: "Product",
-                          render: (row: AttentionRow) =>
-                            row.product_name,
-                        },
-                        {
-                          header: "SKU",
-                          render: (row: AttentionRow) =>
-                            row.sku,
-                          mono: true,
-                        },
-                        {
-                          header: "Location",
-                          render: (row: AttentionRow) =>
-                            row.location_name,
-                        },
-                        {
-                          header: "Quantity",
-                          render: (row: AttentionRow) =>
-                            formatQuantity(row.quantity),
-                          mono: true,
-                        },
-                        {
-                          header: "Reorder level",
-                          render: (row: AttentionRow) =>
-                            formatQuantity(row.reorder_level),
-                          mono: true,
-                        },
-                        {
-                          header: "Suggested quantity",
-                          render: (row: AttentionRow) =>
-                            formatQuantity(
-                              row.suggested_quantity,
-                            ),
-                          mono: true,
-                        },
-                        {
-                          header: "Status",
-                          render: (row: AttentionRow) => (
-                            <Badge
-                              status={
-                                row.stock_status === "OUT"
-                                  ? "out"
-                                  : "low"
-                              }
-                            >
-                              {row.stock_status === "OUT"
-                                ? "OUT OF STOCK"
-                                : "LOW STOCK"}
-                            </Badge>
-                          ),
-                        },
-                      ]}
-                      rows={summary.needs_attention}
-                      keyField={(row: AttentionRow) =>
-                        `${row.product_id}:${row.location_id}`
-                      }
-                    />
-                  </div>
-
-                  <p
-                    style={{
-                      marginTop: "var(--space-2)",
-                    }}
-                  >
-                    Suggested quantity indicates the amount
-                    needed to reach the current reorder level.
-                    {" "}
-                    <Link to="/inventory_overview">
-                      View inventory
-                    </Link>
-                  </p>
-                </>
-              )}
-          </Card>
-
-          <div style={{ marginTop: "var(--space-4)" }}>
-            <Card title="Stock Counts Awaiting Review">
-              {!loading && summary && (
-                <>
-                  <p>
-                    <strong>
-                      {formatQuantity(summary.counts_to_review)}
-                    </strong>{" "}
-                    count(s) are ready for review.
-                  </p>
-
-                  <p>
-                    {formatQuantity(summary.pending_counts)}{" "}
-                    count(s) are currently open.
-                  </p>
-
-                  {canManageStock && (
-                    <Link
-                      to="/inventory_count"
-                      className="btn btn-secondary"
-                    >
-                      Review stock counts
-                    </Link>
-                  )}
-                </>
-              )}
-            </Card>
-          </div>
-
-          <div style={{ marginTop: "var(--space-4)" }}>
-            <Card title="Recent Stock Movements">
-              {!loading &&
-                summary &&
-                summary.recent_movements.length === 0 && (
-                  <p role="status">
-                    No stock movements have been recorded yet.
-                  </p>
-                )}
-
-              {!loading &&
-                summary &&
-                summary.recent_movements.length > 0 && (
-                  <div
-                    className="table-wrap"
-                    style={{ overflowX: "auto" }}
-                  >
-                    <DataTable
-                      columns={[
-                        {
-                          header: "Date & time",
-                          render: (row: MovementRow) =>
-                            formatDate(
-                              row.created_at,
-                              summary?.time_zone,
-                            ),
-                        },
-                        {
-                          header: "Movement",
-                          render: (row: MovementRow) =>
-                            movementName(row.movement_type),
-                        },
-                        {
-                          header: "Product",
-                          render: (row: MovementRow) =>
-                            `${row.product_name} (${row.sku})`,
-                        },
-                        {
-                          header: "Location",
-                          render: (row: MovementRow) =>
-                            row.location_name,
-                        },
-                        {
-                          header: "Change",
-                          render: (row: MovementRow) =>
-                            formatSigned(row.quantity_change),
-                          mono: true,
-                        },
-                        {
-                          header: "Who",
-                          render: (row: MovementRow) =>
-                            row.user_name,
-                        },
-                      ]}
-                      rows={summary.recent_movements}
-                      keyField={(row: MovementRow) =>
-                        row.movement_id
-                      }
-                    />
-                  </div>
-                )}
-
-              <p style={{ marginTop: "var(--space-2)" }}>
-                <Link to="/stock_movement_history">
-                  Open complete stock movement history
+              {canManageStock && (
+                <Link
+                  to="/inventory_count"
+                  className="btn btn-secondary"
+                >
+                  Stock counts
                 </Link>
-              </p>
+              )}
+
+              <Link
+                to="/movements"
+                className="btn btn-secondary"
+              >
+                Movement history
+              </Link>
+            </div>
+
+            <Card title="Needs Attention">
+              {!loading &&
+                summary &&
+                summary.needs_attention.length === 0 && (
+                  <p role="status">
+                    No low-stock or out-of-stock inventory
+                    lines need attention.
+                  </p>
+                )}
+
+              {!loading &&
+                summary &&
+                summary.needs_attention.length > 0 && (
+                  <>
+                    <div
+                      className="table-wrap"
+                      style={{ overflowX: "auto" }}
+                    >
+                      <DataTable
+                        columns={[
+                          {
+                            header: "Product",
+                            render: (row: AttentionRow) =>
+                              row.product_name,
+                          },
+                          {
+                            header: "SKU",
+                            render: (row: AttentionRow) =>
+                              row.sku,
+                            mono: true,
+                          },
+                          {
+                            header: "Location",
+                            render: (row: AttentionRow) =>
+                              row.location_name,
+                          },
+                          {
+                            header: "Quantity",
+                            render: (row: AttentionRow) =>
+                              formatQuantity(row.quantity),
+                            mono: true,
+                          },
+                          {
+                            header: "Reorder level",
+                            render: (row: AttentionRow) =>
+                              formatQuantity(row.reorder_level),
+                            mono: true,
+                          },
+                          {
+                            header: "Suggested quantity",
+                            render: (row: AttentionRow) =>
+                              formatQuantity(
+                                row.suggested_quantity,
+                              ),
+                            mono: true,
+                          },
+                          {
+                            header: "Status",
+                            render: (row: AttentionRow) => (
+                              <Badge
+                                status={
+                                  row.stock_status === "OUT"
+                                    ? "out"
+                                    : "low"
+                                }
+                              >
+                                {row.stock_status === "OUT"
+                                  ? "OUT OF STOCK"
+                                  : "LOW STOCK"}
+                              </Badge>
+                            ),
+                          },
+                        ]}
+                        rows={summary.needs_attention}
+                        keyField={(row: AttentionRow) =>
+                          `${row.product_id}:${row.location_id}`
+                        }
+                      />
+                    </div>
+
+                    <p
+                      style={{
+                        marginTop: "var(--space-2)",
+                      }}
+                    >
+                      Suggested quantity indicates the amount
+                      needed to reach the current reorder level.
+                      {" "}
+                      <Link to="/inventory">
+                        View inventory
+                      </Link>
+                    </p>
+                  </>
+                )}
             </Card>
-          </div>
-        </>
-      )}
+
+            <div style={{ marginTop: "var(--space-4)" }}>
+              <Card title="Stock Counts Awaiting Review">
+                {!loading && summary && (
+                  <>
+                    <p>
+                      <strong>
+                        {formatQuantity(summary.counts_to_review)}
+                      </strong>{" "}
+                      count(s) are ready for review.
+                    </p>
+
+                    <p>
+                      {formatQuantity(summary.pending_counts)}{" "}
+                      count(s) are currently open.
+                    </p>
+
+                    {canManageStock && (
+                      <Link
+                        to="/inventory_count"
+                        className="btn btn-secondary"
+                      >
+                        Review stock counts
+                      </Link>
+                    )}
+                  </>
+                )}
+              </Card>
+            </div>
+
+            <div style={{ marginTop: "var(--space-4)" }}>
+              <Card title="Recent Stock Movements">
+                {!loading &&
+                  summary &&
+                  summary.recent_movements.length === 0 && (
+                    <p role="status">
+                      No stock movements have been recorded yet.
+                    </p>
+                  )}
+
+                {!loading &&
+                  summary &&
+                  summary.recent_movements.length > 0 && (
+                    <div
+                      className="table-wrap"
+                      style={{ overflowX: "auto" }}
+                    >
+                      <DataTable
+                        columns={[
+                          {
+                            header: "Date & time",
+                            render: (row: MovementRow) =>
+                              formatDate(
+                                row.created_at,
+                                summary?.time_zone,
+                              ),
+                          },
+                          {
+                            header: "Movement",
+                            render: (row: MovementRow) =>
+                              movementName(row.movement_type),
+                          },
+                          {
+                            header: "Product",
+                            render: (row: MovementRow) =>
+                              `${row.product_name} (${row.sku})`,
+                          },
+                          {
+                            header: "Location",
+                            render: (row: MovementRow) =>
+                              row.location_name,
+                          },
+                          {
+                            header: "Change",
+                            render: (row: MovementRow) =>
+                              formatSigned(row.quantity_change),
+                            mono: true,
+                          },
+                          {
+                            header: "Who",
+                            render: (row: MovementRow) =>
+                              row.user_name,
+                          },
+                        ]}
+                        rows={summary.recent_movements}
+                        keyField={(row: MovementRow) =>
+                          row.movement_id
+                        }
+                      />
+                    </div>
+                  )}
+
+                <p style={{ marginTop: "var(--space-2)" }}>
+                  <Link to="/movements">
+                    Open complete stock movement history
+                  </Link>
+                </p>
+              </Card>
+            </div>
+          </>
+        )}
+      </div>
     </AppLayout>
   );
 }

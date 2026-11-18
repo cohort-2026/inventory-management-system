@@ -6,7 +6,6 @@ import PageHeader from '../components/PageHeader';
 import DataTable from '../components/DataTable';
 import Badge from '../components/Badge';
 import { useAuth } from '../utils/AuthContext';
-import './InventoryOverview.css';
 
 type StockStatus = 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK';
 type Row = {
@@ -180,63 +179,65 @@ export default function InventoryOverview() {
     update({ search: scanned });
   }
   return <AppLayout>
-    <PageHeader title="Stock on hand" subtitle="Live quantities across active products and active locations."
-      actions={<>
-        <button type="button" className="btn btn-secondary" onClick={() => setRevision(n => n + 1)} disabled={loading}>Refresh</button>
-        {canModify && <Link className="btn btn-primary" to="/adjust_stock">Adjust</Link>}
-        {canModify && <Link className="btn btn-secondary" to="/transfer_stock">Transfer</Link>}
-      </>} />
-    <section className="f04-location-tabs" aria-label="Location selection">
-      <button type="button" className={location ? 'btn btn-secondary' : 'btn btn-primary'} onClick={() => update({ location: '' })}>All locations</button>
-      {locations.map(loc => <button key={loc.id} type="button" className={location === loc.id ? 'btn btn-primary' : 'btn btn-secondary'} onClick={() => update({ location: loc.id })}>{loc.name}</button>)}
-    </section>
-    <div className="f04-summary" aria-label="Stock status filters">
-      {statuses.map(s => <button key={s.label} type="button" aria-pressed={status === s.value} className={`f04-summary-item${status === s.value ? ' selected' : ''}`} onClick={() => update({ status: s.value })}>
-        <span>{s.label}</span><strong>{summary ? summary[s.key] : '—'}</strong>
-      </button>)}
-    </div>
-    <div className="f04-filter-bar">
-      <form onSubmit={e => { void scanSku(e); }}>
-        <label htmlFor="f04-search">Search name or SKU (Enter opens an exact SKU)</label>
-        <input id="f04-search" className="field-input" value={text} maxLength={200} onChange={e => setText(e.target.value)} placeholder="Search or scan SKU" />
-        <button className="btn btn-secondary" type="submit">Search</button>
-      </form>
-      <label>Category
-        <select className="field-input" value={category} onChange={e => update({ category: e.target.value })}>
-          <option value="">All categories</option>
-          {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-      </label>
-      <button className="btn btn-secondary" type="button" onClick={() => { void exportCsv(false); }} disabled={exporting}>Export filtered CSV</button>
-      <button className="btn btn-secondary" type="button" onClick={() => { void exportCsv(true); }} disabled={exporting || selected.length === 0}>Export selected ({selected.length})</button>
-    </div>
-    {optionsError && <p role="alert">Filter options unavailable: {optionsError}</p>}
-    {exportError && <p role="alert">{exportError}</p>}
-    {loading && <p role="status">Loading stock on hand…</p>}
-    {error && <p role="alert">{error} <button className="btn btn-secondary btn-sm" type="button" onClick={() => setRevision(n => n + 1)}>Retry</button></p>}
-    {!loading && !error && <>
-      {rows.length === 0 && <p role="status">{search || location || category || status ? 'No products match these filters.' : 'There are no active products or active locations.'}</p>}
-      {rows.length > 0 && <div className="f04-table">
-        <DataTable<Row>
-          rows={rows} keyField={r => r.id}
-          columns={[
-            { header: 'Select', render: r => <input type="checkbox" aria-label={`Select ${r.name} at ${r.location_name}`} checked={selected.includes(r.id)} onChange={e => setSelected(old => e.target.checked ? [...old, r.id] : old.filter(id => id !== r.id))} /> },
-            { header: 'Product', render: r => <Link className="table-link" to={`/products/${encodeURIComponent(r.product_id)}`}>{r.name}</Link> },
-            { header: 'SKU', render: r => r.sku, mono: true },
-            { header: 'Category', render: r => r.category_name },
-            { header: 'Location', render: r => `${r.location_name} (${r.location_code})` },
-            { header: 'On hand', render: r => r.quantity, mono: true, align: 'right' },
-            { header: 'Minimum', render: r => r.reorder_level, mono: true, align: 'right' },
-            { header: 'Status', render: r => stockChip(r.stock_status) },
-            { header: 'Last movement', render: r => presentDate(r.last_movement_at) },
-          ]} />
-        <label className="f04-select-all"><input type="checkbox" checked={allChecked} onChange={e => setSelected(e.target.checked ? [...new Set([...selected, ...visibleKeys])] : selected.filter(id => !visibleKeys.includes(id)))} /> Select all on this page</label>
-      </div>}
-      <div className="f04-page-bar">
-        <span>{total} product/location entries · Page {page} of {totalPages}</span>
-        <button type="button" className="btn btn-secondary" disabled={page <= 1} onClick={() => { const next = new URLSearchParams(params); next.set('page', String(page - 1)); setParams(next); }}>Previous</button>
-        <button type="button" className="btn btn-secondary" disabled={page >= totalPages} onClick={() => { const next = new URLSearchParams(params); next.set('page', String(page + 1)); setParams(next); }}>Next</button>
+    <div className="enterprise-inventory">
+      <PageHeader title="Stock on hand" subtitle="Live quantities across active products and active locations."
+        actions={<>
+          <button type="button" className="btn btn-secondary" onClick={() => setRevision(n => n + 1)} disabled={loading}>Refresh</button>
+          {canModify && <Link className="btn btn-primary" to="/adjust_stock">Adjust</Link>}
+          {canModify && <Link className="btn btn-secondary" to="/transfer_stock">Transfer</Link>}
+        </>} />
+      <section className="f04-location-tabs" aria-label="Location selection">
+        <button type="button" className={location ? 'btn btn-secondary' : 'btn btn-primary'} onClick={() => update({ location: '' })}>All locations</button>
+        {locations.map(loc => <button key={loc.id} type="button" className={location === loc.id ? 'btn btn-primary' : 'btn btn-secondary'} onClick={() => update({ location: loc.id })}>{loc.name}</button>)}
+      </section>
+      <div className="f04-summary" aria-label="Stock status filters">
+        {statuses.map(s => <button key={s.label} type="button" aria-pressed={status === s.value} className={`f04-summary-item${status === s.value ? ' selected' : ''}`} onClick={() => update({ status: s.value })}>
+          <span>{s.label}</span><strong>{summary ? summary[s.key] : '—'}</strong>
+        </button>)}
       </div>
-    </>}
+      <div className="f04-filter-bar">
+        <form onSubmit={e => { void scanSku(e); }}>
+          <label htmlFor="f04-search">Search name or SKU (Enter opens an exact SKU)</label>
+          <input id="f04-search" className="field-input" value={text} maxLength={200} onChange={e => setText(e.target.value)} placeholder="Search or scan SKU" />
+          <button className="btn btn-secondary" type="submit">Search</button>
+        </form>
+        <label>Category
+          <select className="field-input" value={category} onChange={e => update({ category: e.target.value })}>
+            <option value="">All categories</option>
+            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </label>
+        <button className="btn btn-secondary" type="button" onClick={() => { void exportCsv(false); }} disabled={exporting}>Export filtered CSV</button>
+        <button className="btn btn-secondary" type="button" onClick={() => { void exportCsv(true); }} disabled={exporting || selected.length === 0}>Export selected ({selected.length})</button>
+      </div>
+      {optionsError && <p role="alert">Filter options unavailable: {optionsError}</p>}
+      {exportError && <p role="alert">{exportError}</p>}
+      {loading && <p role="status">Loading stock on hand…</p>}
+      {error && <p role="alert">{error} <button className="btn btn-secondary btn-sm" type="button" onClick={() => setRevision(n => n + 1)}>Retry</button></p>}
+      {!loading && !error && <>
+        {rows.length === 0 && <p role="status">{search || location || category || status ? 'No products match these filters.' : 'There are no active products or active locations.'}</p>}
+        {rows.length > 0 && <div className="f04-table enterprise-table-surface">
+          <DataTable<Row>
+            rows={rows} keyField={r => r.id}
+            columns={[
+              { header: 'Select', render: r => <input type="checkbox" aria-label={`Select ${r.name} at ${r.location_name}`} checked={selected.includes(r.id)} onChange={e => setSelected(old => e.target.checked ? [...old, r.id] : old.filter(id => id !== r.id))} /> },
+              { header: 'Product', render: r => <Link className="table-link" to={`/products/${encodeURIComponent(r.product_id)}`}>{r.name}</Link> },
+              { header: 'SKU', render: r => r.sku, mono: true },
+              { header: 'Category', render: r => r.category_name },
+              { header: 'Location', render: r => `${r.location_name} (${r.location_code})` },
+              { header: 'On hand', render: r => r.quantity, mono: true, align: 'right' },
+              { header: 'Minimum', render: r => r.reorder_level, mono: true, align: 'right' },
+              { header: 'Status', render: r => stockChip(r.stock_status) },
+              { header: 'Last movement', render: r => presentDate(r.last_movement_at) },
+            ]} />
+          <label className="f04-select-all"><input type="checkbox" checked={allChecked} onChange={e => setSelected(e.target.checked ? [...new Set([...selected, ...visibleKeys])] : selected.filter(id => !visibleKeys.includes(id)))} /> Select all on this page</label>
+        </div>}
+        <div className="f04-page-bar">
+          <span>{total} product/location entries · Page {page} of {totalPages}</span>
+          <button type="button" className="btn btn-secondary" disabled={page <= 1} onClick={() => { const next = new URLSearchParams(params); next.set('page', String(page - 1)); setParams(next); }}>Previous</button>
+          <button type="button" className="btn btn-secondary" disabled={page >= totalPages} onClick={() => { const next = new URLSearchParams(params); next.set('page', String(page + 1)); setParams(next); }}>Next</button>
+        </div>
+      </>}
+    </div>
   </AppLayout>;
 }
