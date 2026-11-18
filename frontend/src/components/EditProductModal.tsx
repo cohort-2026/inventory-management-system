@@ -88,21 +88,21 @@ export default function EditProductModal({
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
 
-    useEffect(() => {
-        const dialog = dialogRef.current;
+  useEffect(() => {
+    const dialog = dialogRef.current;
 
-        if (!dialog) return;
+    if (!dialog) return;
 
-        if (!dialog.open) {
-            dialog.showModal();
-        }
+    if (!dialog.open) {
+      dialog.showModal();
+    }
 
-        return () => {
-            if (dialog.open) {
-            dialog.close();
-            }
-        };
-    }, []);
+    return () => {
+      if (dialog.open) {
+        dialog.close();
+      }
+    };
+  }, []);
 
   const initialValues: ProductFormValues = {
     name: product.name,
@@ -199,57 +199,26 @@ export default function EditProductModal({
 
   return createPortal(
     <dialog
-    ref={dialogRef}
-    aria-labelledby="edit-product-title"
-    onCancel={(event) => {
+      ref={dialogRef}
+      className="edit-product-dialog"
+      aria-labelledby="edit-product-title"
+      onCancel={(event) => {
         event.preventDefault();
-
-        // Do not allow Escape to dismiss
-        // the dialog during a save request.
-        if (savingRef.current) {
-        return;
-        }
-
-        onClose();
-    }}
-      style={{
-        width: 'min(620px, calc(100% - 24px))',
-        maxWidth: 'none',
-        maxHeight: 'calc(100dvh - 32px)',
-        overflowY: 'auto',
-        margin: 'auto',
-        padding: 'var(--space-5)',
-        border: '1px solid var(--color-border)',
-        borderRadius: 'var(--radius-md)',
-        background: 'var(--color-surface)',
-        color: 'var(--color-text)',
-        boxShadow: 'var(--shadow-md)',
+        closeModal();
       }}
     >
-      <div
-        className="page-header"
-        style={{ marginBottom: 'var(--space-4)' }}
-      >
-        <div style={{ minWidth: 0 }}>
-          <p className="breadcrumb">
-            Products / Edit Product
-          </p>
-
-          <h2
-            id="edit-product-title"
-            className="page-title"
-          >
+      <div className="page-header edit-product-dialog-header">
+        <div className="edit-product-dialog-heading">
+          <p className="breadcrumb">Products / Edit Product</p>
+          <h2 id="edit-product-title" className="page-title">
             Edit Product
           </h2>
-
-          <p className="page-subtitle">
-            Editing {product.name}
-          </p>
+          <p className="page-subtitle">Editing {product.name}</p>
         </div>
 
         <button
           type="button"
-          className="btn btn-secondary"
+          className="btn btn-secondary edit-product-dialog-close"
           aria-label="Close Edit Product"
           disabled={saving}
           onClick={closeModal}
@@ -257,6 +226,12 @@ export default function EditProductModal({
           ✕
         </button>
       </div>
+
+      {categoriesError && (
+        <p role="alert" className="field-error edit-product-dialog-error">
+          Unable to load categories: {categoriesError}
+        </p>
+      )}
 
       <ProductForm
         mode="edit"
@@ -277,7 +252,7 @@ export default function EditProductModal({
         serverErrors={serverErrors}
         submitError={submitError}
         categoriesLoading={
-            categoriesLoading || !!categoriesError || categories.length === 0
+          categoriesLoading || !!categoriesError || categories.length === 0
         }
       />
     </dialog>,
