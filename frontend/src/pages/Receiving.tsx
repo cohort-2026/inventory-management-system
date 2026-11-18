@@ -13,6 +13,7 @@ import {
   type Supplier,
   type Location
 } from '../services/receivingApi';
+import './StockMovement.css';
 
 export default function Receiving() {
   const nav = useNavigate();
@@ -99,99 +100,97 @@ export default function Receiving() {
 
       {canWrite && (
         <form
-          className="card"
-          style={{ padding: 20, marginBottom: 20 }}
+          className="card stock-movement-form receiving-form"
           onSubmit={e => void create(e)}
         >
-          <h2>Create draft GRN</h2>
-
-          <div
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 12,
-              marginTop: 12
-            }}
-          >
-            <label>
-              Supplier *
-              <select
-                required
-                className="field-select"
-                value={supplierId}
-                onChange={e => setSupplierId(e.target.value)}
-              >
-                <option value="">Select supplier</option>
-
-                {suppliers
-                  .filter(s => s.status === 'active')
-                  .map(s => (
-                    <option
-                      key={s.supplier_id}
-                      value={s.supplier_id}
-                    >
-                      {s.name}
-                    </option>
-                  ))}
-              </select>
-            </label>
-
-            <label>
-              Receiving location *
-              <select
-                required
-                className="field-select"
-                value={locationId}
-                onChange={e => setLocationId(e.target.value)}
-              >
-                <option value="">Select location</option>
-
-                {locations
-                  .filter(l => l.status === 'active')
-                  .map(l => (
-                    <option
-                      key={l.location_id}
-                      value={l.location_id}
-                    >
-                      {l.name} ({l.code})
-                    </option>
-                  ))}
-              </select>
-            </label>
-
-            <label>
-              Supplier delivery note *
-              <input
-                required
-                className="field-input"
-                maxLength={120}
-                value={note}
-                onChange={e => setNote(e.target.value)}
-              />
-            </label>
-
-            <label>
-              Notes
-              <input
-                className="field-input"
-                maxLength={2000}
-                value={extra}
-                onChange={e => setExtra(e.target.value)}
-              />
-            </label>
+          <div className="card-header">
+            <h2>Create draft GRN</h2>
           </div>
 
-          <button
-            className="btn btn-primary"
-            style={{ marginTop: 12 }}
-            disabled={busy || loading}
-          >
-            {busy ? 'Creating…' : 'Create draft'}
-          </button>
+          <div className="card-body">
+            <div className="receiving-form-grid">
+              <label className="field">
+                <span className="field-label">Supplier *</span>
+                <select
+                  required
+                  className="field-select"
+                  value={supplierId}
+                  onChange={e => setSupplierId(e.target.value)}
+                >
+                  <option value="">Select supplier</option>
 
-          <p style={{ marginTop: 8 }}>
-            Need a supplier? <Link to="/suppliers">Manage suppliers</Link>.
-          </p>
+                  {suppliers
+                    .filter(s => s.status === 'active')
+                    .map(s => (
+                      <option
+                        key={s.supplier_id}
+                        value={s.supplier_id}
+                      >
+                        {s.name}
+                      </option>
+                    ))}
+                </select>
+              </label>
+
+              <label className="field">
+                <span className="field-label">Receiving location *</span>
+                <select
+                  required
+                  className="field-select"
+                  value={locationId}
+                  onChange={e => setLocationId(e.target.value)}
+                >
+                  <option value="">Select location</option>
+
+                  {locations
+                    .filter(l => l.status === 'active')
+                    .map(l => (
+                      <option
+                        key={l.location_id}
+                        value={l.location_id}
+                      >
+                        {l.name} ({l.code})
+                      </option>
+                    ))}
+                </select>
+              </label>
+
+              <label className="field">
+                <span className="field-label">Supplier delivery note *</span>
+                <input
+                  required
+                  className="field-input"
+                  maxLength={120}
+                  value={note}
+                  onChange={e => setNote(e.target.value)}
+                />
+              </label>
+
+              <label className="field">
+                <span className="field-label">Notes</span>
+                <input
+                  className="field-input"
+                  maxLength={2000}
+                  value={extra}
+                  onChange={e => setExtra(e.target.value)}
+                />
+              </label>
+            </div>
+
+            <div className="page-actions receiving-actions">
+              <Link to="/suppliers" className="btn btn-secondary">
+                Manage suppliers
+              </Link>
+
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={busy || loading}
+              >
+                {busy ? 'Creating…' : 'Create draft'}
+              </button>
+            </div>
+          </div>
         </form>
       )}
 
@@ -201,59 +200,70 @@ export default function Receiving() {
         </p>
       )}
 
-      {loading ? (
-        <p role="status">Loading receiving documents…</p>
-      ) : error ? (
-        <div role="alert">
-          <p>{error}</p>
-
-          <button
-            className="btn btn-secondary"
-            onClick={() => void reload()}
-          >
-            Retry
-          </button>
+      <section className="receiving-list-section">
+        <div className="card-header receiving-list-header">
+          <h2>Receiving documents</h2>
+          <span className="receiving-count">
+            {items.length} {items.length === 1 ? 'document' : 'documents'}
+          </span>
         </div>
-      ) : items.length === 0 ? (
-        <p>No goods-received notes yet.</p>
-      ) : (
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>GRN</th>
-                <th>Supplier</th>
-                <th>Delivery note</th>
-                <th>Location</th>
-                <th>Status</th>
-                <th>Date</th>
-                <th>Open</th>
-              </tr>
-            </thead>
 
-            <tbody>
-              {items.map(x => (
-                <tr key={x.receipt_id}>
-                  <td>{x.receipt_no}</td>
-                  <td>{x.supplier_name}</td>
-                  <td>{x.delivery_note}</td>
-                  <td>{x.location_name}</td>
-                  <td>{x.status}</td>
-                  <td>{new Date(x.created_at).toLocaleString()}</td>
-                  <td>
-                    <Link
-                      className="btn btn-secondary btn-sm"
-                      to={`/receiving/${x.receipt_id}`}
-                    >
-                      View
-                    </Link>
-                  </td>
+        {loading ? (
+          <p role="status">Loading receiving documents…</p>
+        ) : error ? (
+          <div role="alert" className="receiving-message">
+            <p>{error}</p>
+
+            <button
+              className="btn btn-secondary"
+              onClick={() => void reload()}
+            >
+              Retry
+            </button>
+          </div>
+        ) : items.length === 0 ? (
+          <p className="receiving-message">
+            No goods-received notes yet.
+          </p>
+        ) : (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>GRN</th>
+                  <th>Supplier</th>
+                  <th>Delivery note</th>
+                  <th>Location</th>
+                  <th>Status</th>
+                  <th>Date</th>
+                  <th>Open</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+
+              <tbody>
+                {items.map(x => (
+                  <tr key={x.receipt_id}>
+                    <td>{x.receipt_no}</td>
+                    <td>{x.supplier_name}</td>
+                    <td>{x.delivery_note}</td>
+                    <td>{x.location_name}</td>
+                    <td>{x.status}</td>
+                    <td>{new Date(x.created_at).toLocaleString()}</td>
+                    <td>
+                      <Link
+                        className="btn btn-secondary btn-sm"
+                        to={`/receiving/${x.receipt_id}`}
+                      >
+                        View
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </AppLayout>
   );
 }

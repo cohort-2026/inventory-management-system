@@ -7,6 +7,7 @@ import PageHeader from "../components/PageHeader";
 import Card from "../components/Card";
 import SelectField from "../components/SelectField";
 import Field from "../components/Field";
+import "./StockMovement.css";
 import {
   createStockMovement,
   getInventory,
@@ -271,8 +272,11 @@ export default function AdjustStock() {
     <AppLayout>
       <PageHeader title="Record Stock Movement" />
 
-      <div className="form-with-sidebar">
-        <form onSubmit={handleSubmit}>
+      <div className="form-with-sidebar stock-movement-page">
+        <form
+          className="stock-movement-form"
+          onSubmit={handleSubmit}
+        >
           <SelectField
             label="Movement Type *"
             options={MOVEMENT_OPTIONS}
