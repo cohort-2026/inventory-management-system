@@ -20,6 +20,7 @@ import {
   type Product,
   type EditableLine
 } from '../services/receivingApi';
+import './StockMovement.css';
 
 const blank = (): EditableLine => ({
   product_id: '',
@@ -182,14 +183,14 @@ export default function ReceivingDetail() {
         subtitle="Supplier delivery, line quantities and permanent movement references."
       />
 
-      <p>
-        <Link to="/receiving">Back to receiving</Link>
-      </p>
+      <div className="receiving-back-link">
+        <Link to="/receiving">← Back to receiving</Link>
+      </div>
 
       {loading ? (
         <p role="status">Loading GRN…</p>
       ) : error ? (
-        <div role="alert">
+        <div role="alert" className="receiving-message">
           <p>{error}</p>
 
           <button
@@ -202,243 +203,247 @@ export default function ReceivingDetail() {
       ) : (
         receipt && (
           <>
-            <div
-              className="card"
-              style={{ padding: 20, marginBottom: 20 }}
-            >
-              <p>
-                <strong>Status:</strong> {receipt.status.toUpperCase()}
-              </p>
+            <section className="card receiving-detail-summary">
+              <div className="card-header">
+                <h2>Receipt information</h2>
+                <span className={`receiving-status receiving-status-${receipt.status.toLowerCase()}`}>
+                  {receipt.status.toUpperCase()}
+                </span>
+              </div>
 
-              <p>
-                <strong>Supplier:</strong> {receipt.supplier_name}
-              </p>
+              <div className="card-body receiving-summary-grid">
+                <div>
+                  <span className="receiving-summary-label">Supplier</span>
+                  <strong>{receipt.supplier_name}</strong>
+                </div>
 
-              <p>
-                <strong>Delivery note:</strong> {receipt.delivery_note}
-              </p>
+                <div>
+                  <span className="receiving-summary-label">Delivery note</span>
+                  <strong>{receipt.delivery_note}</strong>
+                </div>
 
-              <p>
-                <strong>Destination:</strong> {receipt.location_name}
-              </p>
+                <div>
+                  <span className="receiving-summary-label">Destination</span>
+                  <strong>{receipt.location_name}</strong>
+                </div>
 
-              <p>
-                <strong>Created:</strong>{' '}
-                {new Date(receipt.created_at).toLocaleString()}
-              </p>
+                <div>
+                  <span className="receiving-summary-label">Created</span>
+                  <strong>{new Date(receipt.created_at).toLocaleString()}</strong>
+                </div>
 
-              {receipt.posted_at && (
-                <p>
-                  <strong>Posted:</strong>{' '}
-                  {new Date(receipt.posted_at).toLocaleString()}
-                </p>
-              )}
-            </div>
+                {receipt.posted_at && (
+                  <div>
+                    <span className="receiving-summary-label">Posted</span>
+                    <strong>{new Date(receipt.posted_at).toLocaleString()}</strong>
+                  </div>
+                )}
+              </div>
+            </section>
 
-            <h2>Received products</h2>
+            <section className="receiving-lines-section">
+              <div className="receiving-lines-heading">
+                <div>
+                  <h2>Received products</h2>
+                  <p>
+                    Pack quantities convert to base units. A short delivery
+                    requires an explanation. Zero received units do not create
+                    stock movements.
+                  </p>
+                </div>
+              </div>
 
-            <p>
-              Pack quantities convert to base units. A short delivery
-              requires an explanation. Zero received units do not create
-              stock movements.
-            </p>
+              <div className="table-wrap">
+                <table className="data-table receiving-detail-table">
+                  <thead>
+                    <tr>
+                      <th>Product</th>
+                      <th>Expected packs</th>
+                      <th>Received packs</th>
+                      <th>Units / pack</th>
+                      <th>Base units</th>
+                      <th>Unit cost</th>
+                      <th>Short-delivery explanation</th>
+                      <th>Movement</th>
+                      {editable && <th>Remove</th>}
+                    </tr>
+                  </thead>
 
-            <div className="table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Product</th>
-                    <th>Expected packs</th>
-                    <th>Received packs</th>
-                    <th>Units / pack</th>
-                    <th>Base units</th>
-                    <th>Unit cost</th>
-                    <th>Short-delivery explanation</th>
-                    <th>Movement</th>
-                    {editable && <th>Remove</th>}
-                  </tr>
-                </thead>
+                  <tbody>
+                    {(draft ? lines : stored).map((line, i) => {
+                      const write = draft ? line : null;
 
-                <tbody>
-                  {(draft ? lines : stored).map((line, i) => {
-                    const write = draft ? line : null;
+                      const product = draft
+                        ? products.find(
+                            p => p.product_id === line.product_id
+                          )
+                        : null;
 
-                    const product = draft
-                      ? products.find(
-                          p => p.product_id === line.product_id
-                        )
-                      : null;
+                      const base = formatReceiptBaseUnits(
+                        line.received_packs,
+                        line.units_per_pack
+                      );
 
-                    const base = formatReceiptBaseUnits(
-                      line.received_packs,
-                      line.units_per_pack
-                    );
-                    const shortDelivery = isShortReceipt(
-                      line.received_packs,
-                      line.expected_packs
-                    );
+                      const shortDelivery = isShortReceipt(
+                        line.received_packs,
+                        line.expected_packs
+                      );
 
-                    return (
-                      <tr
-                        key={
-                          draft
-                            ? i
-                            : (line as ReceiptLine).line_id
-                        }
-                      >
-                        <td>
-                          {editable ? (
-                            <select
-                              aria-label={`Product for line ${i + 1}`}
-                              className="field-select"
-                              value={line.product_id}
-                              onChange={e =>
-                                edit(i, 'product_id', e.target.value)
-                              }
-                            >
-                              <option value="">Select product</option>
+                      return (
+                        <tr
+                          key={
+                            draft
+                              ? i
+                              : (line as ReceiptLine).line_id
+                          }
+                        >
+                          <td>
+                            {editable ? (
+                              <select
+                                aria-label={`Product for line ${i + 1}`}
+                                className="field-select"
+                                value={line.product_id}
+                                onChange={e =>
+                                  edit(i, 'product_id', e.target.value)
+                                }
+                              >
+                                <option value="">Select product</option>
 
-                              {products.map(p => (
-                                <option
-                                  key={p.product_id}
-                                  value={p.product_id}
-                                >
-                                  {p.name} ({p.sku})
-                                </option>
-                              ))}
-                            </select>
-                          ) : write ? (
-                            product?.name ??
-                            products.find(
-                              p => p.product_id === line.product_id
-                            )?.name ??
-                            'Unknown product'
-                          ) : (
-                            <>
-                              {(line as ReceiptLine).product_name} (
-                              {(line as ReceiptLine).sku})
-                            </>
-                          )}
-                        </td>
+                                {products.map(p => (
+                                  <option
+                                    key={p.product_id}
+                                    value={p.product_id}
+                                  >
+                                    {p.name} ({p.sku})
+                                  </option>
+                                ))}
+                              </select>
+                            ) : write ? (
+                              product?.name ??
+                              products.find(
+                                p => p.product_id === line.product_id
+                              )?.name ??
+                              'Unknown product'
+                            ) : (
+                              <>
+                                {(line as ReceiptLine).product_name} (
+                                {(line as ReceiptLine).sku})
+                              </>
+                            )}
+                          </td>
 
-                        {(
-                          [
-                            'expected_packs',
-                            'received_packs',
-                            'units_per_pack'
-                          ] as const
-                        ).map(k => (
-                          <td key={k}>
+                          {(
+                            [
+                              'expected_packs',
+                              'received_packs',
+                              'units_per_pack'
+                            ] as const
+                          ).map(k => (
+                            <td key={k}>
+                              {editable ? (
+                                <input
+                                  className="field-input"
+                                  style={{
+                                    minWidth: 90,
+                                    width: 110
+                                  }}
+                                  type="number"
+                                  min={
+                                    k === 'units_per_pack'
+                                      ? '0.0001'
+                                      : '0'
+                                  }
+                                  step="0.0001"
+                                  aria-label={`${k.replace('_', ' ')} for line ${i + 1}`}
+                                  value={line[k]}
+                                  onChange={e =>
+                                    edit(i, k, e.target.value)
+                                  }
+                                />
+                              ) : (
+                                formatReceiptDecimal(line[k])
+                              )}
+                            </td>
+                          ))}
+
+                          <td>{base}</td>
+
+                          <td>
                             {editable ? (
                               <input
                                 className="field-input"
-                                style={{
-                                  minWidth: 90,
-                                  width: 110
-                                }}
                                 type="number"
-                                min={
-                                  k === 'units_per_pack'
-                                    ? '0.0001'
-                                    : '0'
-                                }
+                                min="0"
                                 step="0.0001"
-                                aria-label={`${k.replace('_', ' ')} for line ${i + 1}`}
-                                value={line[k]}
+                                aria-label={`Unit cost for line ${i + 1}`}
+                                value={line.unit_cost ?? ''}
                                 onChange={e =>
-                                  edit(i, k, e.target.value)
+                                  edit(i, 'unit_cost', e.target.value)
                                 }
                               />
                             ) : (
-                              formatReceiptDecimal(line[k])
+                              formatReceiptDecimal(line.unit_cost)
                             )}
                           </td>
-                        ))}
 
-                        <td>{base}</td>
-
-                        <td>
-                          {editable ? (
-                            <input
-                              className="field-input"
-                              type="number"
-                              min="0"
-                              step="0.0001"
-                              aria-label={`Unit cost for line ${i + 1}`}
-                              value={line.unit_cost ?? ''}
-                              onChange={e =>
-                                edit(i, 'unit_cost', e.target.value)
-                              }
-                            />
-                          ) : (
-                            formatReceiptDecimal(line.unit_cost)
-                          )}
-                        </td>
-
-                        <td>
-                          {editable ? (
-                            <input
-                              className="field-input"
-                              required={shortDelivery}
-                              aria-label={`Short delivery note for line ${i + 1}`}
-                              value={line.short_delivery_note ?? ''}
-                              onChange={e =>
-                                edit(
-                                  i,
-                                  'short_delivery_note',
-                                  e.target.value
-                                )
-                              }
-                            />
-                          ) : (
-                            line.short_delivery_note || '—'
-                          )}
-                        </td>
-
-                        <td>
-                          {!draft &&
-                          (line as ReceiptLine).movement_id ? (
-                            <Link
-                              to={`/movements?reference_id=${encodeURIComponent(receipt.receipt_id)}`}
-                            >
-                              {(line as ReceiptLine).movement_no}
-                            </Link>
-                          ) : (
-                            '—'
-                          )}
-                        </td>
-
-                        {editable && (
                           <td>
-                            <button
-                              className="btn btn-secondary btn-sm"
-                              onClick={() =>
-                                setLines(old =>
-                                  old.filter((_, j) => j !== i)
-                                )
-                              }
-                              type="button"
-                            >
-                              Remove
-                            </button>
+                            {editable ? (
+                              <input
+                                className="field-input"
+                                required={shortDelivery}
+                                aria-label={`Short delivery note for line ${i + 1}`}
+                                value={line.short_delivery_note ?? ''}
+                                onChange={e =>
+                                  edit(
+                                    i,
+                                    'short_delivery_note',
+                                    e.target.value
+                                  )
+                                }
+                              />
+                            ) : (
+                              line.short_delivery_note || '—'
+                            )}
                           </td>
-                        )}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+
+                          <td>
+                            {!draft &&
+                            (line as ReceiptLine).movement_id ? (
+                              <Link
+                                to={`/movements?reference_id=${encodeURIComponent(receipt.receipt_id)}`}
+                              >
+                                {(line as ReceiptLine).movement_no}
+                              </Link>
+                            ) : (
+                              '—'
+                            )}
+                          </td>
+
+                          {editable && (
+                            <td>
+                              <button
+                                className="btn btn-secondary btn-sm"
+                                onClick={() =>
+                                  setLines(old =>
+                                    old.filter((_, j) => j !== i)
+                                  )
+                                }
+                                type="button"
+                              >
+                                Remove
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
 
             {editable && (
-              <div
-                style={{
-                  display: 'flex',
-                  gap: 10,
-                  flexWrap: 'wrap',
-                  marginTop: 16
-                }}
-              >
+              <div className="page-actions receiving-detail-actions">
                 <button
                   className="btn btn-secondary"
                   type="button"
@@ -482,7 +487,7 @@ export default function ReceivingDetail() {
             )}
 
             {dirty && editable && (
-              <p role="status">
+              <p role="status" className="receiving-notice">
                 Unsaved line changes. Save before posting.
               </p>
             )}
@@ -493,10 +498,14 @@ export default function ReceivingDetail() {
               </p>
             )}
 
-            {notice && <p role="status">{notice}</p>}
+            {notice && (
+              <p role="status" className="receiving-notice">
+                {notice}
+              </p>
+            )}
 
             {!draft && (
-              <p>
+              <p className="receiving-readonly-note">
                 Posted GRNs are permanently read-only. Corrections
                 require separate auditable stock movements.
               </p>

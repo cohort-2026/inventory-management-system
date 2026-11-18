@@ -10,12 +10,14 @@ import {
 import { Link, useSearchParams } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
 import PageHeader from '../components/PageHeader';
+import { useAuth } from '../utils/AuthContext';
 import {
   getProducts,
   getLocations,
   type ProductOption,
   type LocationOption,
 } from '../services/api';
+import './StockMovement.css';
 
 type Entity = {
   location_id: string;
@@ -193,6 +195,7 @@ function apiParams(
   if (filters.user_id) {
     p.set('user_id', filters.user_id);
   }
+
   if (filters.reference_id) {
     p.set('reference_id', filters.reference_id);
   }
@@ -295,6 +298,8 @@ export default function StockMovementHistory() {
   const [params, setParams] = useSearchParams();
   const key = params.toString();
 
+  const { user } = useAuth();
+
   const filters = useMemo(
     () => fromQuery(new URLSearchParams(key)),
     [key],
@@ -329,6 +334,11 @@ export default function StockMovementHistory() {
 
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState('');
+
+  const [reversalNotes, setReversalNotes] = useState('');
+  const [reversing, setReversing] = useState(false);
+  const [reversalError, setReversalError] = useState('');
+  const [reversalSuccess, setReversalSuccess] = useState('');
 
   const closeRef = useRef<HTMLButtonElement>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -483,7 +493,6 @@ export default function StockMovementHistory() {
     filters,
   ]);
 
-  // FIX: Capture the non-null ID before entering the async function.
   useEffect(() => {
     if (!selectedId) return;
 
@@ -595,6 +604,92 @@ export default function StockMovementHistory() {
     }
   }
 
+  async function reverseMovement() {
+    if (!detail || !reversalNotes.trim()) {
+      setReversalError(
+        'Please enter a reason for reversing this movement.',
+      );
+      return;
+    }
+
+    if (reversalNotes.trim().length > 2000) {
+      setReversalError(
+        'The reversal note cannot exceed 2000 characters.',
+      );
+      return;
+    }
+
+    const movement = detail.movement;
+
+    if (movement.reverses_movement_id) {
+      setReversalError(
+        'A reversal movement cannot itself be reversed.',
+      );
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Are you sure you want to reverse movement ${movement.movement_no}? This will create a new audit record and update stock.`,
+    );
+
+    if (!confirmed) return;
+
+    setReversing(true);
+    setReversalError('');
+    setReversalSuccess('');
+
+    try {
+      const response = await fetch(
+        `${URL}/${encodeURIComponent(movement.movement_id)}/reverse`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          cache: 'no-store',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({
+            notes: reversalNotes.trim(),
+          }),
+        },
+      );
+
+      const body: unknown = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          isObject(body) && typeof body.error === 'string'
+            ? body.error
+            : `Reversal failed (HTTP ${response.status}).`,
+        );
+      }
+
+      setReversalSuccess(
+        isObject(body) && typeof body.message === 'string'
+          ? body.message
+          : 'Stock movement reversed successfully.',
+      );
+
+      setReversalNotes('');
+      setReload((value) => value + 1);
+
+      const updatedDetail = await json(
+        `${URL}/${encodeURIComponent(movement.movement_id)}`,
+      );
+
+      setDetail(parseDetail(updatedDetail));
+    } catch (e: unknown) {
+      setReversalError(
+        e instanceof Error
+          ? e.message
+          : 'Unable to reverse movement.',
+      );
+    } finally {
+      setReversing(false);
+    }
+  }
+
   function open(
     id: string,
     button?: HTMLButtonElement,
@@ -603,6 +698,9 @@ export default function StockMovementHistory() {
       triggerRef.current = button;
     }
 
+    setReversalNotes('');
+    setReversalError('');
+    setReversalSuccess('');
     setSelectedId(id);
   }
 
@@ -789,7 +887,13 @@ export default function StockMovementHistory() {
             marginTop: 'var(--space-3)',
           }}
         >
-          {filters.reference_id && <p role="status">Showing movements for linked document. Use Clear filters to return to all movements.</p>}
+          {filters.reference_id && (
+            <p role="status">
+              Showing movements for linked document. Use Clear filters
+              to return to all movements.
+            </p>
+          )}
+
           <button
             className="btn btn-secondary"
             type="button"
@@ -1140,12 +1244,20 @@ export default function StockMovementHistory() {
                 </dl>
 
                 {detail.movement.movement_type === 'RECEIPT' &&
-                 detail.movement.reference_no?.startsWith('GRN-') &&
-                 detail.movement.reference_id && (
-                  <p><Link to={`/receiving/${encodeURIComponent(detail.movement.reference_id)}`}>
-                    Open goods-received note {detail.movement.reference_no}
-                  </Link></p>
-                )}
+                  detail.movement.reference_no?.startsWith('GRN-') &&
+                  detail.movement.reference_id && (
+                    <p>
+                      <Link
+                        to={`/receiving/${encodeURIComponent(
+                          detail.movement.reference_id,
+                        )}`}
+                      >
+                        Open goods-received note{' '}
+                        {detail.movement.reference_no}
+                      </Link>
+                    </p>
+                  )}
+
                 <h3>
                   Related movements ({detail.linked.length})
                 </h3>
@@ -1181,6 +1293,71 @@ export default function StockMovementHistory() {
                   be posted as separate reversal movements, not
                   edits or deletions.
                 </p>
+
+                {user?.roleName === 'Manager' &&
+                  !detail.movement.reverses_movement_id &&
+                  !detail.linked.some(
+                    (movement) =>
+                      movement.reverses_movement_id ===
+                      detail.movement.movement_id,
+                  ) && (
+                    <section
+                      className="stock-movement-form"
+                      style={{ marginTop: 'var(--space-4)' }}
+                      aria-label="Reverse stock movement"
+                    >
+                      <h3>Reverse Movement</h3>
+
+                      <p>
+                        This creates a new reversal record and
+                        automatically restores the stock to its
+                        previous balance.
+                      </p>
+
+                      <label style={field}>
+                        Reversal reason / notes
+                        <textarea
+                          className="field-input"
+                          style={{
+                            ...control,
+                            minHeight: 110,
+                          }}
+                          value={reversalNotes}
+                          onChange={(e) =>
+                            setReversalNotes(e.target.value)
+                          }
+                          maxLength={2000}
+                          required
+                          placeholder="Explain why this movement must be reversed..."
+                        />
+                      </label>
+
+                      <p style={{ fontSize: '0.85rem' }}>
+                        {reversalNotes.length}/2000 characters
+                      </p>
+
+                      {reversalError && (
+                        <p role="alert">{reversalError}</p>
+                      )}
+
+                      {reversalSuccess && (
+                        <p role="status">{reversalSuccess}</p>
+                      )}
+
+                      <button
+                        type="button"
+                        className="btn btn-danger"
+                        disabled={
+                          reversing || !reversalNotes.trim()
+                        }
+                        onClick={reverseMovement}
+                      >
+                        {reversing
+                          ? 'Reversing...'
+                          : 'Confirm Reversal'}
+                      </button>
+                    </section>
+                  )}
               </>
             ) : null}
           </aside>
