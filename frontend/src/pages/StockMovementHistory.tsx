@@ -17,7 +17,7 @@ import {
   type ProductOption,
   type LocationOption,
 } from '../services/api';
-import './StockMovement.css';
+
 
 type Entity = {
   location_id: string;
@@ -724,7 +724,7 @@ export default function StockMovementHistory() {
       />
 
       <section
-        className="card"
+       className="card movement-history-filters"
         aria-label="Movement filters"
         style={{
           padding: 'var(--space-4)',
@@ -1117,6 +1117,7 @@ export default function StockMovementHistory() {
 
       {selectedId && (
         <div
+          className="movement-history-overlay"
           role="presentation"
           style={{
             position: 'fixed',
@@ -1129,6 +1130,7 @@ export default function StockMovementHistory() {
           onClick={close}
         >
           <aside
+            className="movement-history-drawer"
             role="dialog"
             aria-modal="true"
             aria-label="Movement details"

@@ -14,7 +14,7 @@ import {
   TransferApiError,
 } from '../services/transferStockApi';
 import type { TransferInventoryRow, TransferResult } from '../services/transferStockApi';
-import './StockMovement.css';
+
 
 type Step = 'form' | 'review' | 'done';
 type FormErrors = Partial<Record<'product' | 'from' | 'to' | 'quantity' | 'note', string>>;
@@ -363,7 +363,7 @@ export default function TransferStock() {
       )}
 
       {step === 'form' && !loading && !blockingError && (
-        <div className="transfer-review-layout stock-movement-page">
+        <div className="form-with-sidebar transfer-stock-page">
           <form
             className="stock-movement-form"
             onSubmit={(event) => void review(event)}
@@ -622,7 +622,7 @@ export default function TransferStock() {
       )}
 
       {step === 'review' && (
-        <div className="form-with-sidebar stock-movement-page">
+        <div className="transfer-review-layout transfer-stock-page">
           <section className="card" aria-label="Review transfer">
             <div className="card-body">
               <h2 className="form-section-title">
