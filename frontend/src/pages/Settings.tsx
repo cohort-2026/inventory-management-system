@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import AppLayout from '../components/AppLayout';
 import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
+import { Bell, Palette, SlidersHorizontal, ShieldCheck, UsersRound, Wrench } from 'lucide-react';
+import { useAuth } from '../utils/AuthContext';
 
 type SystemRole =
   | 'Manager'
@@ -70,6 +72,8 @@ async function readError(
 }
 
 export default function Settings() {
+  const { user: signedInUser } = useAuth();
+  const isManager = signedInUser?.roleName === 'Manager';
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [locations, setLocations] =
@@ -81,7 +85,7 @@ export default function Settings() {
   const [selectedLocations, setSelectedLocations] =
     useState<Record<string, string>>({});
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState('');
 
   const [savingUserId, setSavingUserId] =
@@ -94,6 +98,9 @@ export default function Settings() {
     useState('');
 
   useEffect(() => {
+    // Never request Manager-only user data for Staff or Viewer sessions.
+    if (!isManager) return;
+
     const controller = new AbortController();
 
     async function loadUsers(): Promise<void> {
@@ -192,12 +199,12 @@ export default function Settings() {
     void loadUsers();
 
     return () => controller.abort();
-  }, []);
+  }, [isManager]);
 
   async function saveRole(
     user: ManagedUser,
   ): Promise<void> {
-    if (savingUserId !== null) {
+    if (!isManager || savingUserId !== null) {
       return;
     }
 
@@ -278,6 +285,7 @@ export default function Settings() {
     user: ManagedUser,
   ): Promise<void> {
     if (
+      !isManager ||
       savingUserId !== null ||
       user.roleName !== 'Inventory Staff'
     ) {
@@ -358,317 +366,373 @@ export default function Settings() {
 
   return (
     <AppLayout>
-      <PageHeader
-        breadcrumb="Administration / Settings"
-        title="Settings"
-      />
+      <div className="settings-workspace">
+        <PageHeader
+          breadcrumb="Workspace / Settings"
+          title="Settings"
+          subtitle="Account preferences and workspace configuration."
+        />
 
-      <p
-        className="page-subtitle"
-        style={{
-          marginBottom: 'var(--space-5)',
-        }}
-      >
-        Manage application users, assigned roles and home warehouses.
-      </p>
-
-      <Card title="User Management">
-        {loading ? (
-          <div
-            className="card-body"
-            role="status"
-          >
-            Loading registered users...
+        <section className="settings-hero" aria-labelledby="settings-hero-title">
+          <div className="settings-hero-icon" aria-hidden="true">
+            <SlidersHorizontal size={26} strokeWidth={1.8} />
           </div>
-        ) : loadError ? (
-          <div className="card-body">
-            <p className="field-error" role="alert">
-              {loadError}
+          <div className="settings-hero-copy">
+            <p className="settings-eyebrow">WORKSPACE CONFIGURATION</p>
+            <h2 id="settings-hero-title">Make your workspace your own</h2>
+            <p>
+              Explore upcoming preferences below. They are previews only:
+              no changes are saved or applied.
             </p>
           </div>
-        ) : (
-          <div className="card-body">
-            {successMessage && (
-              <p
-                role="status"
-                style={{
-                  color: 'var(--color-success)',
-                  marginBottom: 'var(--space-4)',
-                }}
-              >
-                {successMessage}
-              </p>
-            )}
+          <span className="settings-role-tag">
+            {signedInUser?.roleName ?? 'Account'} access
+          </span>
+        </section>
 
-            <p
-              className="page-subtitle"
-              style={{
-                marginBottom: 'var(--space-4)',
-              }}
-            >
-              {users.length} registered user
-              {users.length === 1 ? '' : 's'}
-            </p>
+        <section className="settings-section" aria-labelledby="settings-preferences-title">
+          <div className="settings-section-heading">
+            <div>
+              <p className="settings-eyebrow">PLANNED FEATURES</p>
+              <h2 id="settings-preferences-title">Personal preferences</h2>
+              <p>These settings are mock previews and are not operational.</p>
+            </div>
+            <span className="settings-mock-label">Mock · Coming later</span>
+          </div>
 
-            {users.length === 0 ? (
-              <p className="table-empty">
-                No registered users found.
-              </p>
-            ) : (
-              <div className="table-wrap">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th scope="col">User</th>
-                      <th scope="col">Status</th>
-                      <th scope="col">Current Role</th>
-                      <th scope="col">Assign Role</th>
-                      <th scope="col">Home Warehouse</th>
-                      <th scope="col">Action</th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {users.map((user) => {
-                      const selectedRole =
-                        selectedRoles[user.id] ??
-                        user.roleId;
-
-                      const hasRoleChanges =
-                        selectedRole !== user.roleId;
-
-                      const selectedLocation =
-                        selectedLocations[user.id] ??
-                        user.homeLocationId ??
-                        '';
-
-                      const hasLocationChanges =
-                        selectedLocation !==
-                        (user.homeLocationId ?? '');
-
-                      const saving =
-                        savingUserId === user.id;
-
-                      const isInventoryStaff =
-                        user.roleName === 'Inventory Staff';
-
-                      return (
-                        <tr key={user.id}>
-                          <td>
-                            <strong>
-                              {[
-                                user.firstName,
-                                user.lastName,
-                              ]
-                                .filter(Boolean)
-                                .join(' ') || 'Unnamed User'}
-                            </strong>
-
-                            <div className="field-hint">
-                              {user.email}
-                            </div>
-                          </td>
-
-                          <td>
-                            {user.status}
-                          </td>
-
-                          <td>
-                            {user.roleName}
-                          </td>
-
-                          <td>
-                            <label
-                              className="field-label"
-                              htmlFor={`role-${user.id}`}
-                            >
-                              <span
-                                style={{
-                                  position: 'absolute',
-                                  width: '1px',
-                                  height: '1px',
-                                  padding: 0,
-                                  overflow: 'hidden',
-                                  clip: 'rect(0, 0, 0, 0)',
-                                  whiteSpace: 'nowrap',
-                                  border: 0,
-                                }}
-                              >
-                                Role for {user.email}
-                              </span>
-                            </label>
-
-                            <select
-                              id={`role-${user.id}`}
-                              className="field-select"
-                              value={selectedRole}
-                              disabled={savingUserId !== null}
-                              aria-invalid={
-                                !!rowErrors[user.id]
-                              }
-                              onChange={(event) => {
-                                setSelectedRoles(
-                                  (current) => ({
-                                    ...current,
-                                    [user.id]:
-                                      event.target.value,
-                                  }),
-                                );
-
-                                setSuccessMessage('');
-
-                                setRowErrors(
-                                  (current) => ({
-                                    ...current,
-                                    [user.id]: '',
-                                  }),
-                                );
-                              }}
-                            >
-                              {roles.map((role) => (
-                                <option
-                                  key={role.roleId}
-                                  value={role.roleId}
-                                >
-                                  {role.name}
-                                </option>
-                              ))}
-                            </select>
-                          </td>
-
-                          <td>
-                            {isInventoryStaff ? (
-                              <>
-                                <label
-                                  className="field-label"
-                                  htmlFor={`location-${user.id}`}
-                                >
-                                  <span
-                                    style={{
-                                      position: 'absolute',
-                                      width: '1px',
-                                      height: '1px',
-                                      padding: 0,
-                                      overflow: 'hidden',
-                                      clip: 'rect(0, 0, 0, 0)',
-                                      whiteSpace: 'nowrap',
-                                      border: 0,
-                                    }}
-                                  >
-                                    Home warehouse for {user.email}
-                                  </span>
-                                </label>
-
-                                <select
-                                  id={`location-${user.id}`}
-                                  className="field-select"
-                                  value={selectedLocation}
-                                  disabled={
-                                    savingUserId !== null
-                                  }
-                                  aria-invalid={
-                                    !!rowErrors[user.id]
-                                  }
-                                  onChange={(event) => {
-                                    setSelectedLocations(
-                                      (current) => ({
-                                        ...current,
-                                        [user.id]:
-                                          event.target.value,
-                                      }),
-                                    );
-
-                                    setSuccessMessage('');
-
-                                    setRowErrors(
-                                      (current) => ({
-                                        ...current,
-                                        [user.id]: '',
-                                      }),
-                                    );
-                                  }}
-                                >
-                                  <option value="">
-                                    Select warehouse
-                                  </option>
-
-                                  {locations.map((location) => (
-                                    <option
-                                      key={location.location_id}
-                                      value={location.location_id}
-                                    >
-                                      {location.name}
-                                    </option>
-                                  ))}
-                                </select>
-
-                                {hasLocationChanges && (
-                                  <button
-                                    type="button"
-                                    className="btn btn-primary btn-sm"
-                                    style={{
-                                      marginTop: 'var(--space-2)',
-                                    }}
-                                    disabled={
-                                      savingUserId !== null ||
-                                      !selectedLocation
-                                    }
-                                    onClick={() => {
-                                      void saveHomeLocation(user);
-                                    }}
-                                  >
-                                    {saving
-                                      ? 'Saving...'
-                                      : 'Save Warehouse'}
-                                  </button>
-                                )}
-                              </>
-                            ) : (
-                              <span className="field-hint">
-                                Not applicable
-                              </span>
-                            )}
-                          </td>
-
-                          <td>
-                            <button
-                              type="button"
-                              className="btn btn-primary btn-sm"
-                              disabled={
-                                !hasRoleChanges ||
-                                savingUserId !== null
-                              }
-                              onClick={() => {
-                                void saveRole(user);
-                              }}
-                            >
-                              {saving
-                                ? 'Saving...'
-                                : 'Save Role'}
-                            </button>
-
-                            {rowErrors[user.id] && (
-                              <p
-                                className="field-error"
-                                role="alert"
-                                style={{
-                                  marginTop: 'var(--space-2)',
-                                }}
-                              >
-                                {rowErrors[user.id]}
-                              </p>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+          <div className="settings-preview-grid">
+            <article className="settings-preview-card">
+              <span className="settings-preview-icon" aria-hidden="true"><Palette size={20} /></span>
+              <span className="settings-preview-tag">Not functional</span>
+              <h3>Appearance</h3>
+              <p>Choose a light or dark workspace theme and adjust display density.</p>
+              <div className="settings-preview-example" aria-hidden="true">
+                <span className="settings-swatch settings-swatch-blue" />
+                <span className="settings-swatch settings-swatch-slate" />
+                <span className="settings-preview-caption">Theme options · Preview only</span>
               </div>
-            )}
+            </article>
+
+            <article className="settings-preview-card">
+              <span className="settings-preview-icon" aria-hidden="true"><Bell size={20} /></span>
+              <span className="settings-preview-tag">Not functional</span>
+              <h3>Notifications</h3>
+              <p>Configure future low-stock alerts, review reminders and email preferences.</p>
+              <div className="settings-preview-example" aria-hidden="true">
+                <span className="settings-preview-dot" />
+                <span className="settings-preview-caption">Stock alerts · Planned</span>
+              </div>
+            </article>
+
+            <article className="settings-preview-card">
+              <span className="settings-preview-icon" aria-hidden="true"><Wrench size={20} /></span>
+              <span className="settings-preview-tag">Not functional</span>
+              <h3>Display preferences</h3>
+              <p>Set future table density, default warehouse views and date formatting.</p>
+              <div className="settings-preview-example" aria-hidden="true">
+                <span className="settings-preview-caption">Compact tables · Planned</span>
+              </div>
+            </article>
           </div>
+        </section>
+
+        {isManager && (
+          <section className="settings-section" aria-labelledby="settings-admin-title">
+            <div className="settings-section-heading">
+              <div>
+                <p className="settings-eyebrow">MANAGER ACCESS</p>
+                <h2 id="settings-admin-title">Administration</h2>
+                <p>Manage staff access and warehouse assignments.</p>
+              </div>
+              <span className="settings-live-label">Live user controls</span>
+            </div>
+
+            <div className="settings-admin-note">
+              <UsersRound size={20} aria-hidden="true" />
+              <p>Role and home warehouse updates below are live and save to the server.</p>
+            </div>
+            <div className="settings-user-management">
+              <Card title="User Management">
+                {loading ? (
+                  <div
+                    className="card-body"
+                    role="status"
+                  >
+                    Loading registered users...
+                  </div>
+                ) : loadError ? (
+                  <div className="card-body">
+                    <p className="field-error" role="alert">
+                      {loadError}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="card-body">
+                    {successMessage && (
+                      <p role="status" className="settings-success">
+                        {successMessage}
+                      </p>
+                    )}
+
+                    <p className="page-subtitle settings-user-count">
+                      {users.length} registered user
+                      {users.length === 1 ? '' : 's'}
+                    </p>
+
+                    {users.length === 0 ? (
+                      <p className="table-empty">
+                        No registered users found.
+                      </p>
+                    ) : (
+                      <div className="table-wrap">
+                        <table className="data-table">
+                          <thead>
+                            <tr>
+                              <th scope="col">User</th>
+                              <th scope="col">Status</th>
+                              <th scope="col">Current Role</th>
+                              <th scope="col">Assign Role</th>
+                              <th scope="col">Home Warehouse</th>
+                              <th scope="col">Action</th>
+                            </tr>
+                          </thead>
+
+                          <tbody>
+                            {users.map((user) => {
+                              const selectedRole =
+                                selectedRoles[user.id] ??
+                                user.roleId;
+
+                              const hasRoleChanges =
+                                selectedRole !== user.roleId;
+
+                              const selectedLocation =
+                                selectedLocations[user.id] ??
+                                user.homeLocationId ??
+                                '';
+
+                              const hasLocationChanges =
+                                selectedLocation !==
+                                (user.homeLocationId ?? '');
+
+                              const saving =
+                                savingUserId === user.id;
+
+                              const isInventoryStaff =
+                                user.roleName === 'Inventory Staff';
+
+                              return (
+                                <tr key={user.id}>
+                                  <td>
+                                    <strong>
+                                      {[
+                                        user.firstName,
+                                        user.lastName,
+                                      ]
+                                        .filter(Boolean)
+                                        .join(' ') || 'Unnamed User'}
+                                    </strong>
+
+                                    <div className="field-hint">
+                                      {user.email}
+                                    </div>
+                                  </td>
+
+                                  <td>
+                                    {user.status}
+                                  </td>
+
+                                  <td>
+                                    {user.roleName}
+                                  </td>
+
+                                  <td>
+                                    <label
+                                      className="field-label"
+                                      htmlFor={`role-${user.id}`}
+                                    >
+                                      <span className="settings-sr-only">
+                                        Role for {user.email}
+                                      </span>
+                                    </label>
+
+                                    <select
+                                      id={`role-${user.id}`}
+                                      className="field-select"
+                                      value={selectedRole}
+                                      disabled={savingUserId !== null}
+                                      aria-invalid={
+                                        !!rowErrors[user.id]
+                                      }
+                                      onChange={(event) => {
+                                        setSelectedRoles(
+                                          (current) => ({
+                                            ...current,
+                                            [user.id]:
+                                              event.target.value,
+                                          }),
+                                        );
+
+                                        setSuccessMessage('');
+
+                                        setRowErrors(
+                                          (current) => ({
+                                            ...current,
+                                            [user.id]: '',
+                                          }),
+                                        );
+                                      }}
+                                    >
+                                      {roles.map((role) => (
+                                        <option
+                                          key={role.roleId}
+                                          value={role.roleId}
+                                        >
+                                          {role.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </td>
+
+                                  <td>
+                                    {isInventoryStaff ? (
+                                      <>
+                                        <label
+                                          className="field-label"
+                                          htmlFor={`location-${user.id}`}
+                                        >
+                                          <span className="settings-sr-only">
+                                            Home warehouse for {user.email}
+                                          </span>
+                                        </label>
+
+                                        <select
+                                          id={`location-${user.id}`}
+                                          className="field-select"
+                                          value={selectedLocation}
+                                          disabled={
+                                            savingUserId !== null
+                                          }
+                                          aria-invalid={
+                                            !!rowErrors[user.id]
+                                          }
+                                          onChange={(event) => {
+                                            setSelectedLocations(
+                                              (current) => ({
+                                                ...current,
+                                                [user.id]:
+                                                  event.target.value,
+                                              }),
+                                            );
+
+                                            setSuccessMessage('');
+
+                                            setRowErrors(
+                                              (current) => ({
+                                                ...current,
+                                                [user.id]: '',
+                                              }),
+                                            );
+                                          }}
+                                        >
+                                          <option value="">
+                                            Select warehouse
+                                          </option>
+
+                                          {locations.map((location) => (
+                                            <option
+                                              key={location.location_id}
+                                              value={location.location_id}
+                                            >
+                                              {location.name}
+                                            </option>
+                                          ))}
+                                        </select>
+
+                                        {hasLocationChanges && (
+                                          <button
+                                            type="button"
+                                            className="btn btn-primary btn-sm settings-action-gap"
+                                            disabled={
+                                              savingUserId !== null ||
+                                              !selectedLocation
+                                            }
+                                            onClick={() => {
+                                              void saveHomeLocation(user);
+                                            }}
+                                          >
+                                            {saving
+                                              ? 'Saving...'
+                                              : 'Save Warehouse'}
+                                          </button>
+                                        )}
+                                      </>
+                                    ) : (
+                                      <span className="field-hint">
+                                        Not applicable
+                                      </span>
+                                    )}
+                                  </td>
+
+                                  <td>
+                                    <button
+                                      type="button"
+                                      className="btn btn-primary btn-sm"
+                                      disabled={
+                                        !hasRoleChanges ||
+                                        savingUserId !== null
+                                      }
+                                      onClick={() => {
+                                        void saveRole(user);
+                                      }}
+                                    >
+                                      {saving
+                                        ? 'Saving...'
+                                        : 'Save Role'}
+                                    </button>
+
+                                    {rowErrors[user.id] && (
+                                      <p
+                                        className="field-error settings-row-error"
+                                        role="alert"
+                                      >
+                                        {rowErrors[user.id]}
+                                      </p>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </Card>
+            </div>
+          </section>
         )}
-      </Card>
+
+        {isManager && (
+          <section className="settings-section" aria-labelledby="settings-system-title">
+            <div className="settings-section-heading">
+              <div>
+                <p className="settings-eyebrow">PLANNED · MANAGERS</p>
+                <h2 id="settings-system-title">System configuration</h2>
+                <p>Future administrative configuration tools. Nothing here is active.</p>
+              </div>
+              <span className="settings-mock-label">Mock · Coming later</span>
+            </div>
+            <article className="settings-preview-card settings-preview-card-wide">
+              <span className="settings-preview-icon" aria-hidden="true"><ShieldCheck size={20} /></span>
+              <span className="settings-preview-tag">Not functional</span>
+              <h3>Security and audit preferences</h3>
+              <p>Future session policies, audit-retention controls and access-review reminders.</p>
+            </article>
+          </section>
+        )}
+      </div>
     </AppLayout>
   );
 }
