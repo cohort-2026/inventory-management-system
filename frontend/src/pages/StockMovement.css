@@ -804,3 +804,33 @@ nav[aria-label="Movement pagination"] select {
   }
 }
 
+/* TRANSFER STOCK — REVIEW LAYOUT */
+
+.transfer-review-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 760px);
+  justify-content: center;
+  width: 100%;
+}
+
+.transfer-review-layout .card {
+  width: 100%;
+}
+
+.transfer-review-layout .card-body {
+  padding: var(--space-5);
+}
+
+.transfer-review-layout .form-section-title {
+  margin-bottom: var(--space-4);
+}
+
+.transfer-review-layout .transfer-box {
+  margin-bottom: var(--space-3);
+}
+
+@media (max-width: 600px) {
+  .transfer-review-layout .card-body {
+    padding: var(--space-3);
+  }
+}
