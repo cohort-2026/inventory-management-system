@@ -595,3 +595,212 @@ nav[aria-label="Movement pagination"] select {
   }
 }
 
+
+/* =========================================
+   TRANSFER STOCK — PAGE ENHANCEMENTS
+   Uses the existing Dashboard colour palette
+========================================= */
+
+.stock-movement-page .form-section-title {
+  color: var(--color-text);
+  font-size: 1rem;
+  font-weight: 700;
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* Transfer source and destination panels */
+.stock-movement-page .transfer-box {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stock-movement-page .transfer-box:hover {
+  border-color: var(--color-border-strong);
+}
+
+.stock-movement-page .transfer-box h2,
+.stock-movement-page .transfer-box h3 {
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+/* Form spacing and controls */
+.stock-movement-page .stock-movement-form select,
+.stock-movement-page .stock-movement-form input,
+.stock-movement-page .stock-movement-form textarea {
+  max-width: 100%;
+}
+
+.stock-movement-page .stock-movement-form select:focus,
+.stock-movement-page .stock-movement-form input:focus,
+.stock-movement-page .stock-movement-form textarea:focus {
+  border-color: var(--color-primary);
+  outline: 2px solid var(--color-info-bg);
+  outline-offset: 1px;
+}
+
+/* Stock preview and calculated values */
+.stock-movement-page .calc-result {
+  background: var(--color-info-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+/* Transfer review summary */
+.stock-movement-page .card {
+  overflow: hidden;
+}
+
+.stock-movement-page .card-header {
+  background: #f4f8fd;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.stock-movement-page .card-header h2,
+.stock-movement-page .card-header h3 {
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+/* Transfer action buttons */
+.stock-movement-page .page-actions .btn-primary {
+  box-shadow: 0 2px 5px rgba(36, 99, 180, 0.15);
+}
+
+.stock-movement-page .page-actions .btn-primary:hover {
+  box-shadow: 0 3px 8px rgba(36, 99, 180, 0.2);
+}
+
+/* Transfer success/confirmation content */
+.stock-movement-page p[role="status"] {
+  color: var(--color-success);
+  background: var(--color-success-bg);
+  border: 1px solid #c6e6d2;
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+/* Responsive transfer layout */
+@media (max-width: 900px) {
+  .stock-movement-page {
+    grid-template-columns: 1fr;
+  }
+
+  .stock-movement-page .transfer-box {
+    padding: var(--space-3);
+  }
+}
+
+@media (max-width: 600px) {
+  .stock-movement-page .transfer-box {
+    padding: var(--space-3);
+  }
+
+  .stock-movement-page .page-actions {
+    gap: var(--space-2);
+  }
+}
+
+
+/* =========================================
+   TRANSFER STOCK PAGE
+========================================= */
+
+.stock-movement-page .transfer-box {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+  padding: var(--space-4);
+  background: #f4f8fd;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.stock-movement-page .transfer-box > div {
+  min-width: 0;
+}
+
+.stock-movement-page .transfer-box strong {
+  display: block;
+  margin-bottom: var(--space-2);
+  color: var(--color-text);
+  font-size: 0.85rem;
+}
+
+.stock-movement-page .transfer-box p {
+  margin: 0;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+.stock-movement-page .form-section-title {
+  margin: var(--space-4) 0 var(--space-3);
+  padding-bottom: var(--space-2);
+  color: var(--color-text);
+  font-size: 1rem;
+  font-weight: 700;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.stock-movement-page .stock-movement-form select,
+.stock-movement-page .stock-movement-form input,
+.stock-movement-page .stock-movement-form textarea {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: 0.65rem 0.75rem;
+}
+
+.stock-movement-page .stock-movement-form select:focus,
+.stock-movement-page .stock-movement-form input:focus,
+.stock-movement-page .stock-movement-form textarea:focus {
+  outline: 2px solid var(--color-info-bg);
+  border-color: var(--color-primary);
+}
+
+.stock-movement-page .stock-movement-form textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+.stock-movement-page .stock-movement-form [role="alert"] {
+  color: var(--color-danger);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.stock-movement-page .stock-movement-form [role="status"] {
+  color: var(--color-info);
+  background: var(--color-info-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+}
+
+.stock-movement-page .stock-movement-form button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.stock-movement-page .transfer-box + .calc-result {
+  margin-top: var(--space-3);
+}
+
+@media (max-width: 650px) {
+  .stock-movement-page .transfer-box {
+    grid-template-columns: 1fr;
+    padding: var(--space-3);
+  }
+}
+
