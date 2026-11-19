@@ -10,7 +10,7 @@ import {
   Truck,
   ClipboardList,
 } from "lucide-react";
-import { useAuth } from "../utils/AuthContext";
+// import { useAuth } from "../utils/AuthContext";
 
 const NAV_ITEMS = [
   { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
@@ -25,7 +25,7 @@ const NAV_ITEMS = [
 ];
 
 export default function Sidebar() {
-  const { user } = useAuth();
+  // const { user } = useAuth();
 
   return (
     <aside className="app-sidebar enterprise-navy-sidebar">
@@ -41,10 +41,11 @@ export default function Sidebar() {
         <p className="sidebar-section-label">WORKSPACE</p>
 
         <ul className="sidebar-nav">
-          {NAV_ITEMS.filter(
-            (item) =>
-              item.path !== "/settings" || user?.roleName === "Manager"
-          ).map((item) => {
+          {NAV_ITEMS.map((item) => {
+          //   .filter( was before Settings UI patch
+          //   (item) =>
+          //     item.path !== "/settings" || user?.roleName === "Manager"
+          // )
             const Icon = item.icon;
 
             return (
