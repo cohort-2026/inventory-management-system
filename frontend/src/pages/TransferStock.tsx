@@ -363,7 +363,7 @@ export default function TransferStock() {
       )}
 
       {step === 'form' && !loading && !blockingError && (
-        <div className="form-with-sidebar stock-movement-page">
+        <div className="transfer-review-layout stock-movement-page">
           <form
             className="stock-movement-form"
             onSubmit={(event) => void review(event)}
