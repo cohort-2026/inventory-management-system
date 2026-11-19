@@ -1447,3 +1447,1263 @@
   .count-footer-actions { justify-content: stretch; }
   .count-footer-actions .btn { flex: 1 1 100%; }
 }
+
+
+/* ==========================================================
+   TRANSFER STOCK — ENTERPRISE BLUE
+   All Transfer Stock page styling lives in App.css.
+   ========================================================== */
+
+.transfer-stock-page {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+  align-items: start;
+}
+
+.transfer-stock-page .stock-movement-form {
+  min-width: 0;
+  padding: 24px;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgb(25 59 101 / 3%);
+}
+
+.transfer-stock-page .field {
+  margin-bottom: 18px;
+}
+
+.transfer-stock-page .field-label {
+  color: #344b64;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.transfer-stock-page .field-input,
+.transfer-stock-page .field-select,
+.transfer-stock-page .field-textarea {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--color-text);
+}
+
+.transfer-stock-page .field-textarea {
+  min-height: 105px;
+  resize: vertical;
+}
+
+.transfer-stock-page .field-input:focus,
+.transfer-stock-page .field-select:focus,
+.transfer-stock-page .field-textarea:focus {
+  outline: 2px solid #83b4f5;
+  outline-offset: 1px;
+  border-color: #4c8dff;
+}
+
+.transfer-stock-page .field-hint {
+  color: #71849a;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.transfer-stock-page .field-error {
+  margin-top: 5px;
+  color: #b23b3b;
+  font-size: 12px;
+}
+
+.transfer-stock-page .card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgb(25 59 101 / 3%);
+}
+
+.transfer-stock-page .card-header {
+  padding: 17px 20px;
+  background: #f8fbff;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.transfer-stock-page .card-title {
+  color: #243b53;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.transfer-stock-page .card-body {
+  padding: 20px;
+}
+
+.transfer-stock-page .transfer-box {
+  padding: 15px 16px;
+  margin-bottom: 10px;
+  border: 1px solid #dce7f3;
+  border-radius: 9px;
+  background: #f8fbff;
+}
+
+.transfer-stock-page .transfer-box-label {
+  margin-bottom: 7px;
+  color: #60748b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.transfer-stock-page .transfer-box-value {
+  color: #244d78;
+  font-family: var(--font-mono);
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.transfer-stock-page .transfer-arrow {
+  margin: 7px 0;
+  color: #4c83bd;
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.transfer-stock-page .form-section-title {
+  color: #294765;
+  font-size: 15px;
+  font-weight: 700;
+  padding-bottom: 12px;
+  margin-bottom: 18px;
+}
+
+.transfer-stock-page .page-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.transfer-stock-page .page-actions .btn {
+  min-height: 40px;
+  border-radius: 8px;
+}
+
+.transfer-stock-page .mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Review step: one centred card instead of an empty sidebar */
+.transfer-review-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 760px);
+  justify-content: center;
+  width: 100%;
+}
+
+.transfer-review-layout .card {
+  width: 100%;
+}
+
+.transfer-review-layout .card-body > p {
+  margin-bottom: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.transfer-review-layout .transfer-box {
+  margin-bottom: 12px;
+}
+
+/* Transfer progress indicator */
+[aria-label="Transfer progress"] {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 8px 13px;
+  border: 1px solid #d4e5f8;
+  border-radius: 999px;
+  background: #edf5ff;
+  color: #315f91;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Transfer completion */
+[aria-label="Transfer confirmation"] {
+  max-width: 760px;
+  margin-inline: auto;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgb(25 59 101 / 4%);
+}
+
+[aria-label="Transfer confirmation"] .card-body {
+  padding: 24px;
+}
+
+[aria-label="Transfer confirmation"] .form-section-title {
+  color: #21744a;
+  border-bottom-color: #d5eadc;
+}
+
+/* Responsive layout */
+@media (max-width: 900px) {
+  .transfer-stock-page.form-with-sidebar {
+    grid-template-columns: 1fr;
+  }
+
+  .transfer-stock-page .stock-movement-form {
+    padding: 20px;
+  }
+}
+
+@media (max-width: 600px) {
+  .transfer-stock-page .stock-movement-form {
+    padding: 15px;
+  }
+
+  .transfer-stock-page .card-body,
+  [aria-label="Transfer confirmation"] .card-body {
+    padding: 16px;
+  }
+
+  .transfer-stock-page .page-actions {
+    justify-content: stretch;
+  }
+
+  .transfer-stock-page .page-actions .btn {
+    flex: 1 1 100%;
+  }
+
+  .transfer-review-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+
+/* ==========================================================
+   MOVEMENT HISTORY — ENTERPRISE INVENTORY DESIGN
+   ========================================================== */
+
+.movement-history-filters {
+  padding: 22px;
+  margin-top: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: 0 2px 8px rgb(25 59 101 / 3%);
+}
+
+.movement-history-filters label {
+  color: var(--color-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.movement-history-filters .field-input {
+  min-height: 40px;
+  padding: 9px 11px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--color-text);
+}
+
+.movement-history-filters .field-input:focus {
+  outline: 2px solid #83b4f5;
+  outline-offset: 1px;
+  border-color: var(--color-primary);
+}
+
+.movement-history-filters fieldset {
+  border: 0;
+  padding: 0;
+  margin-top: var(--space-3);
+}
+
+.movement-history-filters legend {
+  margin-bottom: 9px;
+  color: var(--color-text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.movement-history-filters fieldset label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  background: #f8fbff;
+  color: #40566f;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.movement-history-filters input[type="checkbox"] {
+  accent-color: var(--color-primary);
+}
+
+.movement-history-filters [role="alert"] {
+  color: var(--color-danger);
+  font-size: 12px;
+  margin-top: 10px;
+}
+
+.movement-history-filters [role="status"] {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.movement-history-filters .btn {
+  min-height: 37px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.movement-history-results {
+  min-width: 0;
+}
+
+.movement-history-results > [role="status"] {
+  margin: 12px 0;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.movement-history-results > [role="alert"] {
+  padding: 16px;
+  border: 1px solid #f0caca;
+  border-radius: 9px;
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
+.movement-history-results .table-wrap {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: 11px;
+  background: var(--color-surface);
+  box-shadow: 0 2px 8px rgb(25 59 101 / 3%);
+}
+
+.movement-history-results .data-table {
+  width: 100%;
+  min-width: 1100px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.movement-history-results .data-table th {
+  padding: 13px 14px;
+  background: #f2f6fb;
+  border-bottom: 1px solid var(--color-border);
+  color: #536a83;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.movement-history-results .data-table td {
+  padding: 13px 14px;
+  border-bottom: 1px solid #eaf0f6;
+  color: var(--color-text);
+  font-size: 12px;
+  vertical-align: middle;
+}
+
+.movement-history-results .data-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.movement-history-results .data-table tbody tr:hover {
+  background: #f7faff;
+}
+
+.movement-history-results .mono {
+  color: #385575;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.movement-history-results .table-link {
+  color: var(--color-primary);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.movement-history-results .table-link:hover {
+  color: var(--color-primary-hover);
+  text-decoration: underline;
+}
+
+.movement-history-results .btn {
+  min-height: 32px;
+  padding: 6px 11px;
+  border-radius: 7px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* Pagination */
+.movement-history-results nav[aria-label="Movement pagination"] {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.movement-history-results nav select {
+  min-height: 34px;
+  margin-left: 5px;
+  padding: 5px 8px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--color-text);
+}
+
+/* Movement details drawer */
+.movement-history-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  justify-content: flex-end;
+  background: rgb(15 35 58 / 48%);
+  backdrop-filter: blur(2px);
+}
+
+.movement-history-drawer {
+  width: min(100%, 560px);
+  height: 100%;
+  overflow-y: auto;
+  padding: 26px;
+  border-left: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: -8px 0 30px rgb(15 35 58 / 12%);
+}
+
+.movement-history-drawer > div:first-child {
+  position: sticky;
+  top: -26px;
+  z-index: 2;
+  padding: 12px 0 16px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.movement-history-drawer h2 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.movement-history-drawer h3 {
+  margin: 22px 0 12px;
+  color: #294765;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.movement-history-drawer dl {
+  margin: 18px 0;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: #f8fbff;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.movement-history-drawer dt {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.movement-history-drawer dd {
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.movement-history-drawer ul {
+  padding-left: 20px;
+}
+
+.movement-history-drawer li {
+  margin-bottom: 9px;
+}
+
+.movement-history-drawer > p {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.movement-history-drawer a {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.movement-history-drawer .stock-movement-form {
+  margin-top: 22px;
+  padding: 18px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: #f8fbff;
+}
+
+.movement-history-drawer .stock-movement-form h3 {
+  margin-top: 0;
+}
+
+.movement-history-drawer .stock-movement-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--color-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.movement-history-drawer .stock-movement-form textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--color-text);
+  resize: vertical;
+}
+
+.movement-history-drawer [role="alert"] {
+  color: var(--color-danger);
+  font-size: 12px;
+}
+
+.movement-history-drawer [role="status"] {
+  color: var(--color-success);
+  font-size: 12px;
+}
+
+/* Smaller screens */
+@media (max-width: 700px) {
+  .movement-history-filters {
+    padding: 15px;
+  }
+
+  .movement-history-drawer {
+    padding: 18px;
+  }
+
+  .movement-history-drawer > div:first-child {
+    top: -18px;
+  }
+
+  .movement-history-results nav[aria-label="Movement pagination"] {
+    align-items: stretch;
+  }
+}
+
+
+/* ==========================================================
+   GOODS RECEIVING — ENTERPRISE INVENTORY DESIGN
+   ========================================================== */
+
+.receiving-form {
+  margin-top: var(--space-4);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: 0 2px 8px rgb(25 59 101 / 3%);
+}
+
+.receiving-form .card-header,
+.receiving-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 17px 20px;
+  border-bottom: 1px solid var(--color-border);
+  background: #f8fbff;
+}
+
+.receiving-form .card-header h2,
+.receiving-list-header h2 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.receiving-form .card-body {
+  padding: 22px;
+}
+
+.receiving-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.receiving-form .field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.receiving-form .field-label {
+  color: #40566f;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.receiving-form .field-input,
+.receiving-form .field-select {
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 11px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--color-text);
+  font-size: 13px;
+}
+
+.receiving-form .field-input:focus,
+.receiving-form .field-select:focus {
+  outline: 2px solid #83b4f5;
+  outline-offset: 1px;
+  border-color: var(--color-primary);
+}
+
+.receiving-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.receiving-actions .btn {
+  min-height: 39px;
+  border-radius: 8px;
+}
+
+/* Receiving documents */
+.receiving-list-section {
+  margin-top: var(--space-4);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: 0 2px 8px rgb(25 59 101 / 3%);
+}
+
+.receiving-list-header {
+  margin: 0;
+}
+
+.receiving-count {
+  padding: 5px 10px;
+  border: 1px solid #d4e5f8;
+  border-radius: 20px;
+  background: #edf5ff;
+  color: #315f91;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.receiving-list-section .table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.receiving-list-section .data-table {
+  width: 100%;
+  min-width: 750px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.receiving-list-section .data-table th {
+  padding: 13px 15px;
+  background: #f2f6fb;
+  border-bottom: 1px solid var(--color-border);
+  color: #536a83;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.receiving-list-section .data-table td {
+  padding: 13px 15px;
+  border-bottom: 1px solid #eaf0f6;
+  color: var(--color-text);
+  font-size: 12px;
+  vertical-align: middle;
+}
+
+.receiving-list-section .data-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.receiving-list-section .data-table tbody tr:hover {
+  background: #f7faff;
+}
+
+.receiving-list-section .btn {
+  border-radius: 7px;
+  font-size: 11px;
+}
+
+.receiving-message {
+  padding: 20px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.receiving-message[role="alert"] {
+  color: var(--color-danger);
+}
+
+.receiving-form + [role="alert"] {
+  margin-top: 12px;
+  color: var(--color-danger);
+  font-size: 12px;
+}
+
+/* Responsive */
+@media (max-width: 700px) {
+  .receiving-form .card-body {
+    padding: 16px;
+  }
+
+  .receiving-form-grid {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+
+  .receiving-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .receiving-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .receiving-form .card-header,
+  .receiving-list-header {
+    padding: 15px;
+  }
+}
+
+/* ==========================================================
+   RECEIVING DETAIL — ENTERPRISE INVENTORY DESIGN
+   ========================================================== */
+
+.receiving-back-link {
+  margin: 12px 0 18px;
+  font-size: 13px;
+}
+
+.receiving-back-link a {
+  color: var(--color-primary);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.receiving-back-link a:hover {
+  color: var(--color-primary-hover);
+  text-decoration: underline;
+}
+
+/* Receipt information */
+.receiving-detail-summary {
+  margin-bottom: 22px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: 0 2px 8px rgb(25 59 101 / 3%);
+}
+
+.receiving-detail-summary .card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 17px 20px;
+  border-bottom: 1px solid var(--color-border);
+  background: #f8fbff;
+}
+
+.receiving-detail-summary .card-header h2 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.receiving-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 22px;
+  padding: 22px;
+}
+
+.receiving-summary-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.receiving-summary-label {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.receiving-summary-grid strong {
+  overflow-wrap: anywhere;
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+/* Receipt status */
+.receiving-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 11px;
+  border: 1px solid transparent;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+}
+
+.receiving-status-draft {
+  border-color: #f0d9a9;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+
+.receiving-status-posted {
+  border-color: #b8e0c6;
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+/* Received products */
+.receiving-lines-section {
+  margin-top: 22px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: 0 2px 8px rgb(25 59 101 / 3%);
+}
+
+.receiving-lines-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 19px 20px;
+  border-bottom: 1px solid var(--color-border);
+  background: #f8fbff;
+}
+
+.receiving-lines-heading h2 {
+  margin: 0 0 6px;
+  color: var(--color-text);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.receiving-lines-heading p {
+  max-width: 760px;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.receiving-lines-section .table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.receiving-detail-table {
+  width: 100%;
+  min-width: 1150px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.receiving-detail-table th {
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--color-border);
+  background: #f2f6fb;
+  color: #536a83;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.receiving-detail-table td {
+  padding: 13px 14px;
+  border-bottom: 1px solid #eaf0f6;
+  color: var(--color-text);
+  font-size: 12px;
+  vertical-align: middle;
+}
+
+.receiving-detail-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.receiving-detail-table tbody tr:hover {
+  background: #f7faff;
+}
+
+.receiving-detail-table .field-input,
+.receiving-detail-table .field-select {
+  width: 100%;
+  min-width: 90px;
+  min-height: 36px;
+  padding: 7px 9px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--color-text);
+  font-size: 12px;
+}
+
+.receiving-detail-table .field-input:focus,
+.receiving-detail-table .field-select:focus {
+  outline: 2px solid #83b4f5;
+  outline-offset: 1px;
+  border-color: var(--color-primary);
+}
+
+.receiving-detail-table a {
+  color: var(--color-primary);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.receiving-detail-table a:hover {
+  text-decoration: underline;
+}
+
+.receiving-detail-table .btn {
+  white-space: nowrap;
+}
+
+/* Draft actions */
+.receiving-detail-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.receiving-detail-actions .btn {
+  min-height: 39px;
+  border-radius: 8px;
+}
+
+.receiving-detail-actions .btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* Notices and errors */
+.receiving-notice,
+.receiving-readonly-note {
+  margin-top: 14px;
+  padding: 12px 15px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.receiving-notice {
+  border-color: #c9def5;
+  background: var(--color-info-bg);
+  color: var(--color-info);
+}
+
+.receiving-readonly-note {
+  border-color: #b8e0c6;
+  background: var(--color-success-bg);
+  color: #276749;
+}
+
+.receiving-detail-summary + [role="alert"],
+.receiving-lines-section ~ [role="alert"] {
+  color: var(--color-danger);
+}
+
+/* Responsive layout */
+@media (max-width: 1000px) {
+  .receiving-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .receiving-detail-summary .card-header,
+  .receiving-lines-heading {
+    padding: 15px;
+  }
+
+  .receiving-summary-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 16px;
+  }
+
+  .receiving-detail-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .receiving-detail-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* ==========================================================
+   ADJUST STOCK — ENTERPRISE INVENTORY DESIGN
+   ========================================================== */
+
+.adjust-stock-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  align-items: start;
+  gap: 22px;
+  margin-top: var(--space-4);
+}
+
+/* Adjustment form */
+.adjust-stock-page .stock-movement-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 18px;
+  min-width: 0;
+  padding: 22px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: 0 2px 8px rgb(25 59 101 / 3%);
+}
+
+.adjust-stock-page .stock-movement-form > .field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.adjust-stock-page .stock-movement-form .field-label {
+  color: #40566f;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.adjust-stock-page .stock-movement-form .field-input,
+.adjust-stock-page .stock-movement-form .field-select,
+.adjust-stock-page .stock-movement-form .field-textarea {
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 11px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--color-text);
+  font-size: 13px;
+}
+
+.adjust-stock-page .stock-movement-form .field-textarea {
+  min-height: 95px;
+  resize: vertical;
+}
+
+.adjust-stock-page .stock-movement-form .field-input:focus,
+.adjust-stock-page .stock-movement-form .field-select:focus,
+.adjust-stock-page .stock-movement-form .field-textarea:focus {
+  outline: 2px solid #83b4f5;
+  outline-offset: 1px;
+  border-color: var(--color-primary);
+}
+
+/* Current and new quantity */
+.adjust-stock-page .calc-result {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  margin: 0;
+  padding: 9px 12px;
+  border: 1px solid #d4e5f8;
+  border-radius: 8px;
+  background: #f2f7fd;
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.adjust-stock-page .field-hint {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* Messages and form actions */
+.adjust-stock-page .stock-movement-form > [role="status"],
+.adjust-stock-page .stock-movement-form > [role="alert"],
+.adjust-stock-page .stock-movement-form > .page-actions {
+  grid-column: 1 / -1;
+}
+
+.adjust-stock-page .stock-movement-form > [role="status"] {
+  color: var(--color-success);
+  font-size: 12px;
+}
+
+.adjust-stock-page .stock-movement-form > [role="alert"] {
+  color: var(--color-danger);
+  font-size: 12px;
+}
+
+.adjust-stock-page .stock-movement-form .page-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 18px;
+  border-top: 1px solid var(--color-border);
+}
+
+.adjust-stock-page .stock-movement-form .btn {
+  min-height: 39px;
+  border-radius: 8px;
+}
+
+/* Movement summary panel */
+.adjust-stock-page > .card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: 0 2px 8px rgb(25 59 101 / 3%);
+}
+
+.adjust-stock-page > .card .card-header {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--color-border);
+  background: #f8fbff;
+}
+
+.adjust-stock-page > .card .card-header h2 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.adjust-stock-page > .card .card-body {
+  padding: 18px;
+}
+
+.adjust-stock-page .calc-line {
+  margin: 0 0 15px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.adjust-stock-page > .card .calc-result {
+  margin: 12px 0;
+  background: var(--color-success-bg);
+  border-color: #c5e5d0;
+  color: var(--color-success);
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .adjust-stock-page {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .adjust-stock-page > .card {
+    width: 100%;
+  }
+}
+
+@media (max-width: 600px) {
+  .adjust-stock-page .stock-movement-form {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 16px;
+    gap: 15px;
+  }
+
+  .adjust-stock-page .stock-movement-form > [role="status"],
+  .adjust-stock-page .stock-movement-form > [role="alert"],
+  .adjust-stock-page .stock-movement-form > .page-actions {
+    grid-column: 1;
+  }
+
+  .adjust-stock-page .stock-movement-form .page-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .adjust-stock-page .stock-movement-form .page-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

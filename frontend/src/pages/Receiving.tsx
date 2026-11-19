@@ -13,7 +13,7 @@ import {
   type Supplier,
   type Location
 } from '../services/receivingApi';
-import './StockMovement.css';
+
 
 export default function Receiving() {
   const nav = useNavigate();

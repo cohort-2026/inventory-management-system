@@ -20,7 +20,7 @@ import {
   type Product,
   type EditableLine
 } from '../services/receivingApi';
-import './StockMovement.css';
+
 
 const blank = (): EditableLine => ({
   product_id: '',
