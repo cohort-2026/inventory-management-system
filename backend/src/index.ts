@@ -64,6 +64,8 @@ app.use('/api/admin/users', adminUsersRoute);
 
 app.use('/api/reorder', reorderRouter);
 app.use('/api/inventory', inventoryRoutes)
+app.use('/api/counts', inventoryCountsRouter);
+// Compatibility alias; uses the same blind, role-filtered F08 controllers.
 app.use('/api/inventory/counts', inventoryCountsRouter);
 app.use('/api/stock-movements', stockMovementsRouter);
 app.use('/api/reason-codes', reasonCodesRouter);
