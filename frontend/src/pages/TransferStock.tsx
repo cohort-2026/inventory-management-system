@@ -13,23 +13,37 @@ import {
   submitStockTransfer,
   TransferApiError,
 } from '../services/transferStockApi';
-import type { TransferInventoryRow, TransferResult } from '../services/transferStockApi';
-
+import type {
+  TransferInventoryRow,
+  TransferResult,
+} from '../services/transferStockApi';
 
 type Step = 'form' | 'review' | 'done';
-type FormErrors = Partial<Record<'product' | 'from' | 'to' | 'quantity' | 'note', string>>;
+
+type FormErrors = Partial<
+  Record<'product' | 'from' | 'to' | 'quantity' | 'note', string>
+>;
 
 function readableError(error: unknown): string {
-  return error instanceof Error ? error.message : 'Unexpected error. Please try again.';
+  return error instanceof Error
+    ? error.message
+    : 'Unexpected error. Please try again.';
 }
 
 function validPositiveDecimal(text: string): boolean {
-  return /^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(text) && /[1-9]/.test(text) && text.length <= 100;
+  return (
+    /^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(text) &&
+    /[1-9]/.test(text) &&
+    text.length <= 100
+  );
 }
 
 function normalizedDecimal(text: string): [string, string] {
   const [whole = '0', fraction = ''] = text.split('.');
-  return [whole.replace(/^0+(?=\d)/, ''), fraction.replace(/0+$/, '')];
+  return [
+    whole.replace(/^0+(?=\d)/, ''),
+    fraction.replace(/0+$/, ''),
+  ];
 }
 
 function compareDecimal(a: string, b: string): number {
@@ -45,10 +59,17 @@ function compareDecimal(a: string, b: string): number {
   }
 
   const length = Math.max(af.length, bf.length);
-  return af.padEnd(length, '0').localeCompare(bf.padEnd(length, '0'));
+
+  return af
+    .padEnd(length, '0')
+    .localeCompare(bf.padEnd(length, '0'));
 }
 
-function addDecimal(a: string, b: string, subtract = false): string {
+function addDecimal(
+  a: string,
+  b: string,
+  subtract = false,
+): string {
   const [, af] = normalizedDecimal(a);
   const [, bf] = normalizedDecimal(b);
   const scale = Math.max(af.length, bf.length);
@@ -58,19 +79,34 @@ function addDecimal(a: string, b: string, subtract = false): string {
     return BigInt(whole + frac.padEnd(scale, '0'));
   };
 
-  const result = subtract ? toInt(a) - toInt(b) : toInt(a) + toInt(b);
-  const negative = result < 0n;
-  const digits = (negative ? -result : result).toString().padStart(scale + 1, '0');
-  const whole = scale ? digits.slice(0, -scale) : digits;
-  const fractional = scale ? digits.slice(-scale).replace(/0+$/, '') : '';
+  const result = subtract
+    ? toInt(a) - toInt(b)
+    : toInt(a) + toInt(b);
 
-  return `${negative ? '-' : ''}${whole}${fractional ? '.' + fractional : ''}`;
+  const negative = result < 0n;
+  const digits = (negative ? -result : result)
+    .toString()
+    .padStart(scale + 1, '0');
+
+  const whole = scale ? digits.slice(0, -scale) : digits;
+  const fractional = scale
+    ? digits.slice(-scale).replace(/0+$/, '')
+    : '';
+
+  return `${negative ? '-' : ''}${whole}${
+    fractional ? '.' + fractional : ''
+  }`;
 }
 
 export default function TransferStock() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
+
+  // Optional values supplied by the replenishment page.
   const requestedProductId = searchParams.get('product_id') ?? '';
+  const requestedFromId = searchParams.get('from_location_id') ?? '';
+  const requestedToId = searchParams.get('to_location_id') ?? '';
+  const requestedQuantity = searchParams.get('quantity') ?? '';
 
   const canTransfer =
     user?.roleName === 'Manager' ||
@@ -80,11 +116,13 @@ export default function TransferStock() {
   const [products, setProducts] = useState<ProductOption[]>([]);
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [inventory, setInventory] = useState<TransferInventoryRow[]>([]);
+
   const [productId, setProductId] = useState('');
   const [fromId, setFromId] = useState('');
   const [toId, setToId] = useState('');
   const [quantity, setQuantity] = useState('');
   const [note, setNote] = useState('');
+
   const [errors, setErrors] = useState<FormErrors>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -93,69 +131,103 @@ export default function TransferStock() {
 
   const submitting = useRef(false);
 
-  const load = useCallback(async (reloadOptions: boolean) => {
-    setLoading(true);
-    setError('');
+  const load = useCallback(
+    async (reloadOptions: boolean) => {
+      setLoading(true);
+      setError('');
 
-    try {
-      if (reloadOptions) {
-        const [opts, records] = await Promise.all([
-          fetchTransferOptions(),
-          fetchAllTransferInventory(),
-        ]);
+      try {
+        if (reloadOptions) {
+          const [opts, records] = await Promise.all([
+            fetchTransferOptions(),
+            fetchAllTransferInventory(),
+          ]);
 
-        setProducts(opts.products);
-        setLocations(opts.locations);
+          setProducts(opts.products);
+          setLocations(opts.locations);
 
-        setProductId((currentProductId) => {
-          const requestedExists = opts.products.some(
-            (product) => product.product_id === requestedProductId,
-          );
+          setProductId((currentProductId) => {
+            const requestedExists = opts.products.some(
+              (product) =>
+                product.product_id === requestedProductId,
+            );
 
-          if (requestedExists) {
-            return requestedProductId;
+            if (requestedExists) {
+              return requestedProductId;
+            }
+
+            const currentExists = opts.products.some(
+              (product) =>
+                product.product_id === currentProductId,
+            );
+
+            return currentExists
+              ? currentProductId
+              : opts.products[0]?.product_id ?? '';
+          });
+
+          setFromId((currentFromId) => {
+            const requestedExists = opts.locations.some(
+              (location) =>
+                location.location_id === requestedFromId,
+            );
+
+            if (requestedFromId && requestedExists) {
+              return requestedFromId;
+            }
+
+            return opts.locations.some(
+              (location) =>
+                location.location_id === currentFromId,
+            )
+              ? currentFromId
+              : opts.locations[0]?.location_id ?? '';
+          });
+
+          setToId((currentToId) => {
+            const requestedExists = opts.locations.some(
+              (location) =>
+                location.location_id === requestedToId,
+            );
+
+            if (requestedToId && requestedExists) {
+              return requestedToId;
+            }
+
+            return opts.locations.some(
+              (location) =>
+                location.location_id === currentToId,
+            )
+              ? currentToId
+              : opts.locations[1]?.location_id ??
+                opts.locations[0]?.location_id ??
+                '';
+          });
+
+          if (validPositiveDecimal(requestedQuantity)) {
+            setQuantity(requestedQuantity);
           }
 
-          const currentExists = opts.products.some(
-            (product) => product.product_id === currentProductId,
-          );
+          setInventory(records);
+        } else {
+          setInventory(await fetchAllTransferInventory());
+        }
 
-          return currentExists
-            ? currentProductId
-            : opts.products[0]?.product_id ?? '';
-        });
-
-        setFromId((currentFromId) =>
-          opts.locations.some(
-            (location) => location.location_id === currentFromId,
-          )
-            ? currentFromId
-            : opts.locations[0]?.location_id ?? '',
-        );
-
-        setToId((currentToId) =>
-          opts.locations.some(
-            (location) => location.location_id === currentToId,
-          )
-            ? currentToId
-            : opts.locations[1]?.location_id ??
-              opts.locations[0]?.location_id ??
-              '',
-        );
-
-        setInventory(records);
-      } else {
-        setInventory(await fetchAllTransferInventory());
+        return true;
+      } catch (caught) {
+        setError(readableError(caught));
+        return false;
+      } finally {
+        setLoading(false);
       }
-
-      return true;
-    } catch (caught) {
-      setError(readableError(caught));
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  }, [requestedProductId]);
+    },
+    [
+      requestedProductId,
+      requestedFromId,
+      requestedToId,
+      requestedQuantity,
+    ],
+  );
 
   useEffect(() => {
     if (!canTransfer) return;
@@ -198,8 +270,8 @@ export default function TransferStock() {
 
   const tooMuch = Boolean(
     fromId &&
-    amountValid &&
-    compareDecimal(quantity, fromBefore) > 0,
+      amountValid &&
+      compareDecimal(quantity, fromBefore) > 0,
   );
 
   const fromAfter =
@@ -294,7 +366,10 @@ export default function TransferStock() {
       const message = readableError(caught);
       setError(message);
 
-      if (caught instanceof TransferApiError && caught.status === 409) {
+      if (
+        caught instanceof TransferApiError &&
+        caught.status === 409
+      ) {
         try {
           setInventory(await fetchAllTransferInventory());
         } catch (refreshError) {
@@ -378,8 +453,8 @@ export default function TransferStock() {
                 id="transfer-product"
                 className="field-select"
                 value={productId}
-                onChange={(e) => {
-                  setProductId(e.target.value);
+                onChange={(event) => {
+                  setProductId(event.target.value);
                   setErrors({});
                 }}
                 aria-invalid={Boolean(fieldError('product'))}
@@ -392,9 +467,12 @@ export default function TransferStock() {
               >
                 <option value="">Select a product</option>
 
-                {products.map((p) => (
-                  <option key={p.product_id} value={p.product_id}>
-                    {p.name} ({p.sku})
+                {products.map((product) => (
+                  <option
+                    key={product.product_id}
+                    value={product.product_id}
+                  >
+                    {product.name} ({product.sku})
                   </option>
                 ))}
               </select>
@@ -420,8 +498,8 @@ export default function TransferStock() {
                   id="transfer-from"
                   className="field-select"
                   value={fromId}
-                  onChange={(e) => {
-                    setFromId(e.target.value);
+                  onChange={(event) => {
+                    setFromId(event.target.value);
                     setErrors({});
                   }}
                   aria-invalid={Boolean(fieldError('from'))}
@@ -434,9 +512,12 @@ export default function TransferStock() {
                 >
                   <option value="">Select source</option>
 
-                  {locations.map((l) => (
-                    <option key={l.location_id} value={l.location_id}>
-                      {l.name}
+                  {locations.map((location) => (
+                    <option
+                      key={location.location_id}
+                      value={location.location_id}
+                    >
+                      {location.name}
                     </option>
                   ))}
                 </select>
@@ -461,8 +542,8 @@ export default function TransferStock() {
                   id="transfer-to"
                   className="field-select"
                   value={toId}
-                  onChange={(e) => {
-                    setToId(e.target.value);
+                  onChange={(event) => {
+                    setToId(event.target.value);
                     setErrors({});
                   }}
                   aria-invalid={Boolean(fieldError('to'))}
@@ -475,9 +556,12 @@ export default function TransferStock() {
                 >
                   <option value="">Select destination</option>
 
-                  {locations.map((l) => (
-                    <option key={l.location_id} value={l.location_id}>
-                      {l.name}
+                  {locations.map((location) => (
+                    <option
+                      key={location.location_id}
+                      value={location.location_id}
+                    >
+                      {location.name}
                     </option>
                   ))}
                 </select>
@@ -516,8 +600,8 @@ export default function TransferStock() {
                 type="text"
                 inputMode="decimal"
                 value={quantity}
-                onChange={(e) => {
-                  setQuantity(e.target.value);
+                onChange={(event) => {
+                  setQuantity(event.target.value);
                   setErrors({});
                 }}
                 aria-invalid={Boolean(fieldError('quantity'))}
@@ -554,8 +638,8 @@ export default function TransferStock() {
                 className="field-textarea"
                 maxLength={2000}
                 value={note}
-                onChange={(e) => {
-                  setNote(e.target.value);
+                onChange={(event) => {
+                  setNote(event.target.value);
                   setErrors({});
                 }}
                 aria-invalid={Boolean(fieldError('note'))}
