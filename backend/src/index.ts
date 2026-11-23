@@ -17,7 +17,8 @@ import stockMovementsRouter from './routes/stockMovements';
 import reasonCodesRouter from './routes/reasonCodes';
 import dashboardRoutes from './routes/dashboardRoutes';
 import { supplierRouter, receiptRouter } from './routes/receiving';
-
+import reorderRulesRouter from './routes/reorderRules';
+import reorderRouter from './routes/reorder';
 
 const app = express();
 
@@ -51,6 +52,7 @@ app.get('/api/admin', requireAuth, requireRole('admin'), (req, res) => {
 // ROUTES THAT ARE CORE FEATURES
 
 // Product creation - FR-03, BR-01
+app.use('/api/products', reorderRulesRouter);
 app.use('/api/products', productsRoute);
 app.use('/api/categories', categoriesRouter);
 
@@ -60,6 +62,7 @@ app.use('/api/locations', locationsRoute);
 // Admin related routes
 app.use('/api/admin/users', adminUsersRoute);
 
+app.use('/api/reorder', reorderRouter);
 app.use('/api/inventory', inventoryRoutes)
 app.use('/api/inventory/counts', inventoryCountsRouter);
 app.use('/api/stock-movements', stockMovementsRouter);
