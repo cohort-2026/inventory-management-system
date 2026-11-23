@@ -1,4 +1,6 @@
-import { NavLink } from "react-router-dom";
+
+import { useEffect, useState } from "react";
+import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   Package,
@@ -9,13 +11,23 @@ import {
   Settings,
   Truck,
   ClipboardList,
+  RefreshCw,
 } from "lucide-react";
-// import { useAuth } from "../utils/AuthContext";
+
+const API_BASE_URL = `${
+  import.meta.env.VITE_API_URL ?? "http://localhost:5000"
+}/api`;
+
+type ReorderResponse = {
+  count?: number;
+  reorder_items?: unknown[];
+};
 
 const NAV_ITEMS = [
   { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
   { label: "Products", path: "/product_list", icon: Package },
   { label: "Inventory", path: "/inventory", icon: Boxes },
+  { label: "Replenishment", path: "/reorder", icon: RefreshCw },
   { label: "Counts", path: "/inventory_count", icon: ClipboardCheck },
   { label: "Locations", path: "/locations", icon: MapPin },
   { label: "Movement History", path: "/movements", icon: ArrowLeftRight },
@@ -25,11 +37,49 @@ const NAV_ITEMS = [
 ];
 
 export default function Sidebar() {
-  // const { user } = useAuth();
+  const [reorderCount, setReorderCount] = useState(0);
+  const location = useLocation();
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const fetchReorderCount = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/reorder`, {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch replenishment count.");
+        }
+
+        const data: ReorderResponse = await response.json();
+
+        const count =
+          typeof data.count === "number"
+            ? data.count
+            : data.reorder_items?.length ?? 0;
+
+        setReorderCount(count);
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          return;
+        }
+
+        console.error("Unable to load replenishment count:", error);
+      }
+    };
+
+    fetchReorderCount();
+
+    return () => controller.abort();
+  }, [location.pathname]);
 
   return (
     <aside className="app-sidebar enterprise-navy-sidebar">
-
       <div className="sidebar-brand">
         <span className="sidebar-brand-mark" aria-hidden="true">
           <Boxes size={18} />
@@ -42,10 +92,6 @@ export default function Sidebar() {
 
         <ul className="sidebar-nav">
           {NAV_ITEMS.map((item) => {
-          //   .filter( was before Settings UI patch
-          //   (item) =>
-          //     item.path !== "/settings" || user?.roleName === "Manager"
-          // )
             const Icon = item.icon;
 
             return (
@@ -57,7 +103,31 @@ export default function Sidebar() {
                   }
                 >
                   <Icon size={18} strokeWidth={1.8} aria-hidden="true" />
+
                   <span>{item.label}</span>
+
+                  {item.path === "/reorder" && reorderCount > 0 && (
+                    <span
+                      className="sidebar-count-badge"
+                      aria-label={`${reorderCount} items need replenishment`}
+                      style={{
+                        marginLeft: "auto",
+                        minWidth: "22px",
+                        height: "22px",
+                        padding: "0 6px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        borderRadius: "999px",
+                        backgroundColor: "#dc2626",
+                        color: "#ffffff",
+                        fontSize: "11px",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {reorderCount}
+                    </span>
+                  )}
                 </NavLink>
               </li>
             );

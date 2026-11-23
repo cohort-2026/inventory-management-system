@@ -33,6 +33,7 @@ import Settings from "./pages/Settings";
 import Suppliers from "./pages/Suppliers";
 import Receiving from "./pages/Receiving";
 import ReceivingDetail from "./pages/ReceivingDetail";
+import Reorder from "./pages/Reorder";
 
 function LegacyInventoryRedirect() {
   const location = useLocation();
@@ -194,6 +195,15 @@ function App() {
           />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+          <Route
+           path="/reorder"
+           element={
+              <ProtectedRoute>
+                <Reorder />
+              </ProtectedRoute>
+            }
+          />
 
           <Route
             path="/settings"
