@@ -28,7 +28,7 @@ const NAV_ITEMS = [
   { label: "Products", path: "/product_list", icon: Package },
   { label: "Inventory", path: "/inventory", icon: Boxes },
   { label: "Replenishment", path: "/reorder", icon: RefreshCw },
-  { label: "Counts", path: "/inventory_count", icon: ClipboardCheck },
+  { label: "Counts", path: "/counts", icon: ClipboardCheck },
   { label: "Locations", path: "/locations", icon: MapPin },
   { label: "Movement History", path: "/movements", icon: ArrowLeftRight },
   { label: "Suppliers", path: "/suppliers", icon: Truck },

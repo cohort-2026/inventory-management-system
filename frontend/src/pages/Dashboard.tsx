@@ -8,6 +8,7 @@ import Card from "../components/Card";
 import DataTable from "../components/DataTable";
 import Badge from "../components/Badge";
 import { useAuth } from "../utils/AuthContext";
+import ManagerCountReviewQueue from "../components/ManagerCountReviewQueue";
 
 type RecordObject = Record<string, unknown>;
 
@@ -693,7 +694,8 @@ export default function Dashboard() {
             </Card>
 
             <div style={{ marginTop: "var(--space-4)" }}>
-              <Card title="Stock Counts Awaiting Review">
+              <ManagerCountReviewQueue />
+              {/* <Card title="Stock Counts Awaiting Review">
                 {!loading && summary && (
                   <>
                     <p>
@@ -718,7 +720,7 @@ export default function Dashboard() {
                     )}
                   </>
                 )}
-              </Card>
+              </Card> */}
             </div>
 
             <div style={{ marginTop: "var(--space-4)" }}>

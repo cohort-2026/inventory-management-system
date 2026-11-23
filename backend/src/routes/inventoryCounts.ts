@@ -1,53 +1,37 @@
 import { Router } from 'express';
-import {
-  startInventoryCount,
-  listInventoryCounts,
-  getInventoryCount,
-  recordCountItems,
-  finalizeInventoryCount,
-} from '../controllers/inventoryCountController';
 import { requireSession } from '../middleware/requireSession';
 import { customRequireRole } from '../middleware/customRequireRole';
+import {
+  createCount,
+  getCount,
+  listCounts,
+  saveCountItems,
+  submitCount,
+  postingNotImplemented,
+  getReview,
+  listReviewReasons,
+  saveReviewReasons,
+  requestRecount,
+  postCount,
+  cancelCount,
+} from '../controllers/f08CountController';
 
 const router = Router();
-
-// FR-16: Inventory Count - all routes need login
 router.use(requireSession);
 
-// POST /api/inventory/counts - Start a count
-router.post(
-  '/',
-  customRequireRole('Manager', 'Inventory Staff'),
-  startInventoryCount,
-);
+router.get('/', customRequireRole('Manager', 'Inventory Staff', 'Viewer'), listCounts);
+router.post('/', customRequireRole('Manager', 'Inventory Staff'), createCount);
+router.get('/review-reasons', customRequireRole('Manager'), listReviewReasons);
+router.get('/:id', customRequireRole('Manager', 'Inventory Staff', 'Viewer'), getCount);
+router.patch('/:id/items', customRequireRole('Manager', 'Inventory Staff'), saveCountItems);
+router.post('/:id/submit', customRequireRole('Manager', 'Inventory Staff'), submitCount);
 
-// GET /api/inventory/counts - List counts
-router.get(
-  '/',
-  customRequireRole('Manager', 'Inventory Staff'),
-  listInventoryCounts,
-);
-
-// GET /api/inventory/counts/:id - One count with items + variance
-router.get(
-  '/:id',
-  customRequireRole('Manager', 'Inventory Staff'),
-  getInventoryCount,
-);
-
-// PATCH /api/inventory/counts/:id/items - Record counted quantities
-router.patch(
-  '/:id/items',
-  customRequireRole('Manager', 'Inventory Staff'),
-  recordCountItems,
-);
-
-// POST /api/inventory/counts/:id/finalize - Finalize (stricter role)
-// Only Manager can finalize - Inventory Staff can record, but not finalize
-router.post(
-  '/:id/finalize',
-  customRequireRole('Manager'),
-  finalizeInventoryCount,
-);
+// Explicitly disable the legacy finalize endpoint for all roles.
+router.post('/:id/finalize', customRequireRole('Manager'), postingNotImplemented);
+router.get('/:id/review', customRequireRole('Manager'), getReview);
+router.patch('/:id/reasons', customRequireRole('Manager'), saveReviewReasons);
+router.post('/:id/recount', customRequireRole('Manager'), requestRecount);
+router.post('/:id/post', customRequireRole('Manager'), postCount);
+router.post('/:id/cancel', customRequireRole('Manager'), cancelCount);
 
 export default router;
