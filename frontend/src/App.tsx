@@ -20,6 +20,7 @@ import TransferStock from "./pages/TransferStock";
 import InventoryOverview from "./pages/InventoryOverview";
 import InventoryCount from "./pages/InventoryCount";
 import InventoryCountDetail from "./pages/InventoryCountDetail";
+import InventoryCountReview from "./pages/InventoryCountReview";
 import StockMovementHistory from "./pages/StockMovementHistory";
 import Dashboard from "./pages/Dashboard";
 import Register from "./pages/Register";
@@ -53,6 +54,17 @@ function LegacyMovementRedirect() {
 
 function LegacyProductRedirect() {
   return <Navigate to="/product_list" replace />;
+}
+
+function LegacyCountRedirect() {
+  const location = useLocation();
+  return <Navigate to={`/counts${location.search}`} replace />;
+}
+
+function LegacyCountDetailRedirect() {
+  const location = useLocation();
+  const countId = location.pathname.split('/').pop() ?? '';
+  return <Navigate to={`/counts/${encodeURIComponent(countId)}${location.search}`} replace />;
 }
 
 function App() {
@@ -145,21 +157,32 @@ function App() {
             element={<ProtectedRoute><InventoryOverview /></ProtectedRoute>}
           />
           <Route
-            path="/inventory_count"
+            path="/counts"
+            element={<ProtectedRoute><InventoryCount /></ProtectedRoute>}
+          />
+
+          <Route
+            path="/counts/:countId/review"
             element={
-              <ProtectedRoute>
-                <InventoryCount />
+              <ProtectedRoute allowedRoles={["Manager"]}>
+                <InventoryCountReview />
               </ProtectedRoute>
             }
           />
 
           <Route
+            path="/counts/:countId"
+            element={<ProtectedRoute><InventoryCountDetail /></ProtectedRoute>}
+          />
+
+          <Route
+            path="/inventory_count"
+            element={<ProtectedRoute><LegacyCountRedirect /></ProtectedRoute>}
+          />
+
+          <Route
             path="/inventory_count/:countId"
-            element={
-              <ProtectedRoute>
-                <InventoryCountDetail />
-              </ProtectedRoute>
-            }
+            element={<ProtectedRoute><LegacyCountDetailRedirect /></ProtectedRoute>}
           />
 
           <Route
