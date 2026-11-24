@@ -11,6 +11,54 @@ export interface InventoryRecord {
   location_name: string;
 }
 
+export type InventoryStockStatus =
+  | "IN_STOCK"
+  | "LOW_STOCK"
+  | "OUT_OF_STOCK";
+
+export interface InventoryPageRecord {
+  id: string;
+  inventory_id: string | null;
+  product_id: string;
+  location_id: string;
+  name: string;
+  sku: string;
+  category_id: string | null;
+  category_name: string;
+  location_name: string;
+  location_code: string;
+  quantity: string;
+  reorder_level: string;
+  stock_status: InventoryStockStatus;
+  status: string;
+  updated_at: string | null;
+  last_movement_at: string | null;
+}
+
+export interface InventoryPageResponse {
+  items: InventoryPageRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
+export interface InventorySummary {
+  total: number;
+  in_stock: number;
+  low_stock: number;
+  out_of_stock: number;
+}
+
+export interface InventoryFilters {
+  search?: string;
+  location?: string;
+  category?: string;
+  status?: InventoryStockStatus | "";
+  page?: number;
+  pageSize?: number;
+  selected?: string[];
+}
+
 export interface ProductOption {
   product_id: string;
   name: string;
@@ -136,6 +184,218 @@ async function request(
   return data;
 }
 
+/**
+ * Builds query parameters for the inventory endpoints.
+ */
+function buildInventoryQuery(
+  filters: InventoryFilters = {},
+  includePagination = true,
+): string {
+  const params = new URLSearchParams();
+
+  if (filters.search?.trim()) {
+    params.set("search", filters.search.trim());
+  }
+
+  if (filters.location) {
+    params.set("location", filters.location);
+  }
+
+  if (filters.category) {
+    params.set("category", filters.category);
+  }
+
+  if (filters.status) {
+    params.set("status", filters.status);
+  }
+
+  if (includePagination) {
+    if (filters.page !== undefined) {
+      params.set("page", String(filters.page));
+    }
+
+    if (filters.pageSize !== undefined) {
+      params.set("pageSize", String(filters.pageSize));
+    }
+  }
+
+  if (filters.selected?.length) {
+    params.set("selected", filters.selected.join(","));
+  }
+
+  return params.toString();
+}
+
+/**
+ * F04: Retrieve one filtered page of inventory records.
+ */
+export async function getInventoryPage(
+  filters: InventoryFilters = {},
+): Promise<InventoryPageResponse> {
+  const query = buildInventoryQuery(filters, true);
+
+  const data = await request(
+    `/inventory${query ? `?${query}` : ""}`,
+  );
+
+  if (
+    !isObject(data) ||
+    !Array.isArray(data.items) ||
+    typeof data.page !== "number" ||
+    !Number.isSafeInteger(data.page) ||
+    typeof data.pageSize !== "number" ||
+    !Number.isSafeInteger(data.pageSize) ||
+    typeof data.total !== "number" ||
+    !Number.isSafeInteger(data.total) ||
+    data.page < 1 ||
+    data.pageSize < 1 ||
+    data.total < 0
+  ) {
+    throw new Error(
+      "The server returned an unexpected inventory page response.",
+    );
+  }
+
+  const validItems = data.items.every(
+    (item) =>
+      isObject(item) &&
+      typeof item.id === "string" &&
+      (item.inventory_id === null ||
+        typeof item.inventory_id === "string") &&
+      typeof item.product_id === "string" &&
+      typeof item.location_id === "string" &&
+      typeof item.name === "string" &&
+      typeof item.sku === "string" &&
+      (item.category_id === null ||
+        typeof item.category_id === "string") &&
+      typeof item.category_name === "string" &&
+      typeof item.location_name === "string" &&
+      typeof item.location_code === "string" &&
+      (typeof item.quantity === "string" ||
+        typeof item.quantity === "number") &&
+      Number.isFinite(Number(item.quantity)) &&
+      (typeof item.reorder_level === "string" ||
+        typeof item.reorder_level === "number") &&
+      Number.isFinite(Number(item.reorder_level)) &&
+      (
+        item.stock_status === "IN_STOCK" ||
+        item.stock_status === "LOW_STOCK" ||
+        item.stock_status === "OUT_OF_STOCK"
+      ) &&
+      typeof item.status === "string" &&
+      (item.updated_at === null ||
+        typeof item.updated_at === "string") &&
+      (item.last_movement_at === null ||
+        typeof item.last_movement_at === "string"),
+  );
+
+  if (!validItems) {
+    throw new Error(
+      "The server returned an invalid inventory record.",
+    );
+  }
+
+  return {
+    items: data.items as InventoryPageRecord[],
+    page: data.page,
+    pageSize: data.pageSize,
+    total: data.total,
+  };
+}
+
+/**
+ * F04: Retrieve inventory summary counts.
+ * The summary follows search, location and category filters.
+ * It intentionally does not apply the stock status filter.
+ */
+export async function getInventorySummary(
+  filters: InventoryFilters = {},
+): Promise<InventorySummary> {
+  const summaryFilters: InventoryFilters = {
+    search: filters.search,
+    location: filters.location,
+    category: filters.category,
+  };
+
+  const query = buildInventoryQuery(summaryFilters, false);
+
+  const data = await request(
+    `/inventory/summary${query ? `?${query}` : ""}`,
+  );
+
+  if (
+    !isObject(data) ||
+    typeof data.total !== "number" ||
+    !Number.isSafeInteger(data.total) ||
+    typeof data.in_stock !== "number" ||
+    !Number.isSafeInteger(data.in_stock) ||
+    typeof data.low_stock !== "number" ||
+    !Number.isSafeInteger(data.low_stock) ||
+    typeof data.out_of_stock !== "number" ||
+    !Number.isSafeInteger(data.out_of_stock)
+  ) {
+    throw new Error(
+      "The server returned an unexpected inventory summary response.",
+    );
+  }
+
+  return {
+    total: data.total,
+    in_stock: data.in_stock,
+    low_stock: data.low_stock,
+    out_of_stock: data.out_of_stock,
+  };
+}
+
+/**
+ * F04: Export filtered inventory records as a CSV file.
+ *
+ * This uses fetch directly because the endpoint returns CSV,
+ * rather than the JSON response handled by request().
+ */
+export async function exportInventoryCsv(
+  filters: InventoryFilters = {},
+): Promise<void> {
+  const query = buildInventoryQuery(filters, false);
+
+  const response = await fetch(
+    `${API_BASE_URL}/inventory/export.csv${query ? `?${query}` : ""}`,
+    {
+      method: "GET",
+      credentials: "include",
+      headers: {
+        Accept: "text/csv",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    const data: unknown = await response.json().catch(() => ({}));
+
+    const message =
+      isObject(data) && typeof data.error === "string"
+        ? data.error
+        : `CSV export failed. HTTP ${response.status}`;
+
+    throw new Error(message);
+  }
+
+  const blob = await response.blob();
+  const downloadUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = downloadUrl;
+  link.download = "stock-on-hand.csv";
+
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  window.setTimeout(() => {
+    URL.revokeObjectURL(downloadUrl);
+  }, 1000);
+}
+
 export async function getProducts(): Promise<ProductOption[]> {
   const data = await request("/products?status=active&page=1&pageSize=100");
 
@@ -258,6 +518,7 @@ export async function getLocations(): Promise<LocationOption[]> {
 
 /**
  * Fetch all pages rather than treating the paginated inventory endpoint as an array.
+ * Kept for existing pages that need the complete inventory list.
  */
 export async function getInventory(): Promise<InventoryRecord[]> {
   const pageSize = 100;
