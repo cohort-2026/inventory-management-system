@@ -1,10 +1,14 @@
 
 import type { Response } from 'express';
-import type { SessionAuthenticatedRequest } from '../middleware/requireSession';
+import type {
+  RoleAuthenticatedRequest,
+} from '../middleware/customRequireRole';
+
 import {
   withTransaction,
   TransactionConcurrencyError,
 } from '../db/withTransaction';
+
 import {
   StockRuleError,
   assertActiveStockProduct,
@@ -57,7 +61,7 @@ type PgError = Error & {
 
 class RequestError extends Error {
   constructor(
-    public readonly statusCode: 400 | 404,
+    public readonly statusCode: 400 | 403 | 404,
     message: string,
   ) {
     super(message);
@@ -78,7 +82,11 @@ const FIELDS = new Set([
 ]);
 
 function parseAdjustment(body: unknown): AdjustmentInput {
-  if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+  if (
+    body === null ||
+    typeof body !== 'object' ||
+    Array.isArray(body)
+  ) {
     throw new RequestError(400, 'Body must be a JSON object.');
   }
 
@@ -99,14 +107,20 @@ function parseAdjustment(body: unknown): AdjustmentInput {
     typeof data.product_id !== 'string' ||
     !UUID_REGEX.test(data.product_id)
   ) {
-    throw new RequestError(400, 'product_id must be a valid UUID.');
+    throw new RequestError(
+      400,
+      'product_id must be a valid UUID.',
+    );
   }
 
   if (
     typeof data.location_id !== 'string' ||
     !UUID_REGEX.test(data.location_id)
   ) {
-    throw new RequestError(400, 'location_id must be a valid UUID.');
+    throw new RequestError(
+      400,
+      'location_id must be a valid UUID.',
+    );
   }
 
   if (
@@ -161,7 +175,7 @@ function parseAdjustment(body: unknown): AdjustmentInput {
 
 // POST /api/inventory/adjustments
 export async function createInventoryAdjustment(
-  req: SessionAuthenticatedRequest,
+  req: RoleAuthenticatedRequest,
   res: Response,
 ): Promise<void> {
   let input: AdjustmentInput;
@@ -179,10 +193,15 @@ export async function createInventoryAdjustment(
       return;
     }
 
-    throw error;
+    res.status(400).json({
+      error: 'Invalid adjustment request.',
+    });
+    return;
   }
 
-  const userId = req.authenticatedUser?.id;
+  const user = req.authenticatedUser;
+  const userId = user?.id;
+  const role = req.resolvedRole;
 
   if (!userId) {
     res.status(401).json({
@@ -191,18 +210,67 @@ export async function createInventoryAdjustment(
     return;
   }
 
+  if (
+    role !== 'Manager' &&
+    role !== 'Inventory Staff'
+  ) {
+    res.status(403).json({
+      error: 'Insufficient permissions to adjust inventory.',
+    });
+    return;
+  }
+
   try {
     const result = await withTransaction(async (client) => {
+      // Enforce the Inventory Staff home warehouse assignment.
+      // Never trust a warehouse ID supplied by the frontend.
+      if (role === 'Inventory Staff') {
+        const assignment = await client.query<{
+          home_location_id: string | null;
+        }>(
+          `
+            SELECT home_location_id
+            FROM public.users
+            WHERE user_id = $1
+              AND status = 'active'
+            LIMIT 1
+          `,
+          [userId],
+        );
+
+        const homeLocationId =
+          assignment.rows[0]?.home_location_id ?? null;
+
+        if (!homeLocationId) {
+          throw new RequestError(
+            403,
+            'No home warehouse is assigned to this account.',
+          );
+        }
+
+        if (input.location_id !== homeLocationId) {
+          throw new RequestError(
+            403,
+            'You can only adjust stock at your assigned warehouse.',
+          );
+        }
+      }
+
       // Verify that the product exists and is active.
-      await assertActiveStockProduct(client, input.product_id);
+      await assertActiveStockProduct(
+        client,
+        input.product_id,
+      );
 
       // Check the product's unit of measure.
       const productResult = await client.query<{
         unit_of_measure: string | null;
       }>(
-        `SELECT unit_of_measure
-         FROM public.products
-         WHERE product_id = $1`,
+        `
+          SELECT unit_of_measure
+          FROM public.products
+          WHERE product_id = $1
+        `,
         [input.product_id],
       );
 
@@ -228,16 +296,21 @@ export async function createInventoryAdjustment(
         location_id: string;
         status: string;
       }>(
-        `SELECT location_id, status
-         FROM public.locations
-         WHERE location_id = $1`,
+        `
+          SELECT location_id, status
+          FROM public.locations
+          WHERE location_id = $1
+        `,
         [input.location_id],
       );
 
       const locationRow = location.rows[0];
 
       if (!locationRow) {
-        throw new RequestError(404, 'Location not found.');
+        throw new RequestError(
+          404,
+          'Location not found.',
+        );
       }
 
       if (
@@ -251,15 +324,17 @@ export async function createInventoryAdjustment(
 
       // Compatibility mapping for the legacy free-text adjustment endpoint.
       const reasonCodeResult = await client.query<ReasonCodeRow>(
-        `SELECT
-           reason_code_id,
-           label,
-           requires_note
-         FROM public.reason_codes
-         WHERE movement_type = 'ADJUSTMENT'
-           AND code = 'DATA_ENTRY_CORRECTION'
-           AND active = true
-         LIMIT 1`,
+        `
+          SELECT
+            reason_code_id,
+            label,
+            requires_note
+          FROM public.reason_codes
+          WHERE movement_type = 'ADJUSTMENT'
+            AND code = 'DATA_ENTRY_CORRECTION'
+            AND active = true
+          LIMIT 1
+        `,
       );
 
       const reasonCode = reasonCodeResult.rows[0];
@@ -278,7 +353,10 @@ export async function createInventoryAdjustment(
         .filter(Boolean)
         .join('\n');
 
-      if (reasonCode.requires_note && !movementNotes.trim()) {
+      if (
+        reasonCode.requires_note &&
+        !movementNotes.trim()
+      ) {
         throw new RequestError(
           400,
           'A note is required for this adjustment reason code.',
@@ -290,23 +368,25 @@ export async function createInventoryAdjustment(
       if (input.direction === 'increase') {
         // Atomic upsert: parallel increases accumulate safely.
         const upsert = await client.query<InventoryQuantityRow>(
-          `WITH changed AS (
-             INSERT INTO public.inventory AS inv (
-               product_id,
-               location_id,
-               quantity
-             )
-             VALUES ($1, $2, $3::numeric)
-             ON CONFLICT (product_id, location_id)
-             DO UPDATE
-               SET quantity = inv.quantity + EXCLUDED.quantity
-             RETURNING inventory_id, quantity
-           )
-           SELECT
-             inventory_id,
-             (quantity - $3::numeric)::text AS quantity_before,
-             quantity::text AS quantity_after
-           FROM changed`,
+          `
+            WITH changed AS (
+              INSERT INTO public.inventory AS inv (
+                product_id,
+                location_id,
+                quantity
+              )
+              VALUES ($1, $2, $3::numeric)
+              ON CONFLICT (product_id, location_id)
+              DO UPDATE
+                SET quantity = inv.quantity + EXCLUDED.quantity
+              RETURNING inventory_id, quantity
+            )
+            SELECT
+              inventory_id,
+              (quantity - $3::numeric)::text AS quantity_before,
+              quantity::text AS quantity_after
+            FROM changed
+          `,
           [
             input.product_id,
             input.location_id,
@@ -326,7 +406,9 @@ export async function createInventoryAdjustment(
       }
 
       if (!quantityRow) {
-        throw new Error('Inventory update returned no row.');
+        throw new Error(
+          'Inventory update returned no row.',
+        );
       }
 
       const signedChange =
@@ -336,36 +418,38 @@ export async function createInventoryAdjustment(
 
       // Record the adjustment and its F01 reason code atomically.
       const movement = await client.query<MovementRow>(
-        `INSERT INTO public.stock_movements (
-           product_id,
-           location_id,
-           user_id,
-           movement_type,
-           quantity_change,
-           quantity_before,
-           quantity_after,
-           reason_code_id,
-           reason,
-           notes
-         )
-         VALUES (
-           $1, $2, $3, 'ADJUSTMENT',
-           $4::numeric, $5::numeric, $6::numeric,
-           $7::uuid, $8, $9
-         )
-         RETURNING
-           movement_id,
-           product_id,
-           location_id,
-           user_id,
-           movement_type,
-           quantity_change::text AS quantity_change,
-           quantity_before::text AS quantity_before,
-           quantity_after::text AS quantity_after,
-           reason_code_id,
-           reason,
-           notes,
-           created_at`,
+        `
+          INSERT INTO public.stock_movements (
+            product_id,
+            location_id,
+            user_id,
+            movement_type,
+            quantity_change,
+            quantity_before,
+            quantity_after,
+            reason_code_id,
+            reason,
+            notes
+          )
+          VALUES (
+            $1, $2, $3, 'ADJUSTMENT',
+            $4::numeric, $5::numeric, $6::numeric,
+            $7::uuid, $8, $9
+          )
+          RETURNING
+            movement_id,
+            product_id,
+            location_id,
+            user_id,
+            movement_type,
+            quantity_change::text AS quantity_change,
+            quantity_before::text AS quantity_before,
+            quantity_after::text AS quantity_after,
+            reason_code_id,
+            reason,
+            notes,
+            created_at
+        `,
         [
           input.product_id,
           input.location_id,
@@ -380,7 +464,9 @@ export async function createInventoryAdjustment(
       );
 
       if (!movement.rows[0]) {
-        throw new Error('Movement insert returned no row.');
+        throw new Error(
+          'Movement insert returned no row.',
+        );
       }
 
       return {
@@ -424,7 +510,10 @@ export async function createInventoryAdjustment(
       return;
     }
 
-    console.error('Inventory adjustment failed:', error);
+    console.error(
+      'Inventory adjustment failed:',
+      error,
+    );
 
     res.status(500).json({
       error: 'Unable to adjust inventory.',

@@ -1,12 +1,13 @@
 
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
+import type { RoleAuthenticatedRequest } from '../middleware/customRequireRole';
 import { dbPool } from '../db/pool';
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function getInventoryLevel(
-  req: Request,
+  req: RoleAuthenticatedRequest,
   res: Response,
 ): Promise<void> {
   const productId = req.query.product_id;
@@ -26,7 +27,60 @@ export async function getInventoryLevel(
     return;
   }
 
+  const userId = req.authenticatedUser?.id;
+  const role = req.resolvedRole;
+
+  if (!userId) {
+    res.status(401).json({
+      error: 'Authentication required.',
+    });
+    return;
+  }
+
+  if (!role) {
+    res.status(403).json({
+      error: 'User role could not be verified.',
+    });
+    return;
+  }
+
   try {
+    // Inventory Staff can only access their assigned warehouse.
+    if (role === 'Inventory Staff') {
+      const assignmentResult = await dbPool.query<{
+        home_location_id: string | null;
+      }>(
+        `SELECT home_location_id
+         FROM public.users
+         WHERE user_id = $1
+           AND status = 'active'
+         LIMIT 1`,
+        [userId],
+      );
+
+      const homeLocationId =
+        assignmentResult.rows[0]?.home_location_id;
+
+      if (!homeLocationId) {
+        res.status(403).json({
+          error: 'No warehouse has been assigned to your account.',
+        });
+        return;
+      }
+
+      if (homeLocationId !== locationId) {
+        res.status(403).json({
+          error: 'You can only view stock levels in your assigned warehouse.',
+        });
+        return;
+      }
+    } else if (role !== 'Manager' && role !== 'Viewer') {
+      res.status(403).json({
+        error: 'You do not have permission to view inventory levels.',
+      });
+      return;
+    }
+
     const [productResult, locationResult] = await Promise.all([
       dbPool.query<{
         product_id: string;
@@ -53,14 +107,18 @@ export async function getInventoryLevel(
     const product = productResult.rows[0];
 
     if (!product) {
-      res.status(404).json({ error: 'Product not found.' });
+      res.status(404).json({
+        error: 'Product not found.',
+      });
       return;
     }
 
     const location = locationResult.rows[0];
 
     if (!location) {
-      res.status(404).json({ error: 'Location not found.' });
+      res.status(404).json({
+        error: 'Location not found.',
+      });
       return;
     }
 

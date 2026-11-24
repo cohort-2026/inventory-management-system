@@ -1,7 +1,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import AppLayout from "../components/AppLayout";
 import PageHeader from "../components/PageHeader";
 import Card from "../components/Card";
@@ -40,9 +40,6 @@ function getErrorMessage(error: unknown): string {
 }
 
 export default function AdjustStock() {
-  const [searchParams] = useSearchParams();
-  const requestedProductId = searchParams.get("product_id") ?? "";
-
   const [products, setProducts] = useState<ProductOption[]>([]);
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [inventory, setInventory] = useState<InventoryRecord[]>([]);
@@ -69,8 +66,11 @@ export default function AdjustStock() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  // Reason codes are loading whenever they do not match
+  // the currently selected movement type.
   const loadingReasons = reasonCodesType !== movementType;
 
+  // Load products, locations and existing inventory.
   useEffect(() => {
     let active = true;
 
@@ -86,16 +86,7 @@ export default function AdjustStock() {
         setLocations(loadedLocations);
         setInventory(loadedInventory);
 
-        const requestedProductExists = loadedProducts.some(
-          (product) => product.product_id === requestedProductId,
-        );
-
-        setProductId(
-          requestedProductExists
-            ? requestedProductId
-            : loadedProducts[0]?.product_id ?? "",
-        );
-
+        setProductId(loadedProducts[0]?.product_id ?? "");
         setLocationId(loadedLocations[0]?.location_id ?? "");
       })
       .catch((loadError: unknown) => {
@@ -112,8 +103,9 @@ export default function AdjustStock() {
     return () => {
       active = false;
     };
-  }, [requestedProductId]);
+  }, []);
 
+  // Load reason codes for the selected movement type.
   useEffect(() => {
     let active = true;
 
@@ -271,11 +263,8 @@ export default function AdjustStock() {
     <AppLayout>
       <PageHeader title="Record Stock Movement" />
 
-      <div className="form-with-sidebar adjust-stock-page">
-        <form
-          className="stock-movement-form"
-          onSubmit={handleSubmit}
-        >
+      <div className="form-with-sidebar">
+        <form onSubmit={handleSubmit}>
           <SelectField
             label="Movement Type *"
             options={MOVEMENT_OPTIONS}
