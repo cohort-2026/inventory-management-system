@@ -1,6 +1,6 @@
 
 import type { Response } from 'express';
-import type { SessionAuthenticatedRequest } from '../middleware/requireSession';
+import type { RoleAuthenticatedRequest } from '../middleware/customRequireRole';
 import {
   withTransaction,
   TransactionConcurrencyError,
@@ -136,9 +136,26 @@ function parseTransfer(body: unknown): TransferInput {
 
 // POST /api/inventory/transfers
 export async function createInventoryTransfer(
-  req: SessionAuthenticatedRequest,
+  req: RoleAuthenticatedRequest,
   res: Response,
 ): Promise<void> {
+  const userId = req.authenticatedUser?.id;
+
+  if (!userId) {
+    res.status(401).json({
+      error: 'Authentication required.',
+    });
+    return;
+  }
+
+  // Only Managers may transfer stock between warehouses.
+  if (req.resolvedRole !== 'Manager') {
+    res.status(403).json({
+      error: 'Only Managers can transfer stock between warehouses.',
+    });
+    return;
+  }
+
   let input: TransferInput;
 
   try {
@@ -155,15 +172,6 @@ export async function createInventoryTransfer(
     }
 
     throw error;
-  }
-
-  const userId = req.authenticatedUser?.id;
-
-  if (!userId) {
-    res.status(401).json({
-      error: 'Authentication required.',
-    });
-    return;
   }
 
   try {

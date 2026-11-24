@@ -14,7 +14,6 @@ export type SessionUser = {
   email: string;
   roleId: string;
   status: string;
-  homeLocationId: string | null;
 };
 
 export type CreatedSession = {
@@ -87,15 +86,13 @@ export async function validateSession(
     email: string;
     role_id: string;
     status: string;
-    home_location_id: string | null;
   }>(
     `
       SELECT
         u.user_id,
         u.email,
         u.role_id,
-        u.status,
-        u.home_location_id
+        u.status
       FROM public.auth_sessions AS s
       INNER JOIN public.users AS u
         ON u.user_id = s.user_id
@@ -119,7 +116,6 @@ export async function validateSession(
     email: user.email,
     roleId: user.role_id,
     status: user.status,
-    homeLocationId: user.home_location_id,
   };
 }
 

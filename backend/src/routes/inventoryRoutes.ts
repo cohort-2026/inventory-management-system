@@ -1,23 +1,45 @@
 
-import { Router } from "express";
-import { requireAuth } from "../middleware/requireAuth";
-import { requireRole } from "../middleware/requireRole";
+import { Router } from 'express';
+import {
+  getInventory,
+  getInventorySummary,
+  exportInventoryCsv,
+} from '../controllers/inventoryController';
+import { createInventoryAdjustment } from '../controllers/inventoryAdjustmentController';
+import { requireSession } from '../middleware/requireSession';
+import { customRequireRole } from '../middleware/customRequireRole';
+import { createInventoryTransfer } from '../controllers/inventoryTransferController';
+import { getInventoryLevel } from '../controllers/inventoryLevelController';
 
 const router = Router();
 
-// Any authenticated user can view inventory.
-router.get("/inventory", requireAuth, (req, res) => {
-  res.json({ message: "Inventory access granted." });
-});
+const readable = [
+  requireSession,
+  customRequireRole('Manager', 'Inventory Staff', 'Viewer'),
+];
 
-// Only staff or admins can adjust stock.
-router.patch(
-  "/inventory/:id/adjust",
-  requireAuth,
-  requireRole("staff", "admin"),
-  (req, res) => {
-    res.json({ message: "Stock adjustment access granted." });
-  }
+router.get('/', ...readable, getInventory);
+
+router.get('/summary', ...readable, getInventorySummary);
+
+router.get('/export.csv', ...readable, exportInventoryCsv);
+
+// Preserve F01 stock-level, adjustment, and transfer contracts.
+router.get('/level', ...readable, getInventoryLevel);
+
+router.post(
+  '/adjustments',
+  requireSession,
+  customRequireRole('Manager', 'Inventory Staff'),
+  createInventoryAdjustment,
+);
+
+// Only Managers can transfer stock between warehouses.
+router.post(
+  '/transfers',
+  requireSession,
+  customRequireRole('Manager'),
+  createInventoryTransfer,
 );
 
 export default router;
