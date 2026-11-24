@@ -1,4 +1,3 @@
-
 import type { Response } from 'express';
 import type { PoolClient } from 'pg';
 
@@ -572,7 +571,10 @@ export async function getF09TransferDetails(
 
   const transferId = req.params.transferId;
 
-  if (!UUID_REGEX.test(transferId)) {
+  if (
+    typeof transferId !== 'string' ||
+    !UUID_REGEX.test(transferId)
+  ) {
     res.status(400).json({ error: 'Invalid transfer ID.' });
     return;
   }
@@ -925,7 +927,10 @@ export async function receiveF09Transfer(
 
   const transferId = req.params.transferId;
 
-  if (!UUID_REGEX.test(transferId)) {
+  if (
+    typeof transferId !== 'string' ||
+    !UUID_REGEX.test(transferId)
+  ) {
     res.status(400).json({ error: 'Invalid transfer ID.' });
     return;
   }
@@ -1337,7 +1342,10 @@ export async function cancelF09Transfer(
 
   const transferId = req.params.transferId;
 
-  if (!UUID_REGEX.test(transferId)) {
+  if (
+    typeof transferId !== 'string' ||
+    !UUID_REGEX.test(transferId)
+  ) {
     res.status(400).json({ error: 'Invalid transfer ID.' });
     return;
   }
