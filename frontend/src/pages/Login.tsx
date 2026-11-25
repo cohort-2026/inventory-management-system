@@ -1,137 +1,219 @@
-import { useState } from "react";
-import type { FormEvent } from "react";
+import { useState } from 'react';
+import type { FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { Eye, EyeOff } from "lucide-react";
+import {
+  ArrowRight,
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  Layers3,
+  LockKeyhole,
+  Mail,
+  ShieldCheck,
+} from 'lucide-react';
 
 type LoginScreenProps = {
   onSubmit: (email: string, password: string) => Promise<void>;
 };
 
-type FieldErrors = { email?: string; password?: string };
+type FieldErrors = {
+  email?: string;
+  password?: string;
+};
 
 export function LoginScreen({ onSubmit }: LoginScreenProps) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<FieldErrors>({});
   const [loginError, setLoginError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const toggleVisibility = () => {
-    setShowPassword((prev) => !prev);
-  };
+  function toggleVisibility() {
+    setShowPassword((previous) => !previous);
+  }
 
-  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     setLoginError(null);
+
     const next: FieldErrors = {};
-    if (!email.trim()) next.email = "Email is required";
-    else if (!/^\S+@\S+\.\S+$/.test(email.trim())) next.email = "Enter a valid email address";
-    if (!password) next.password = "Password is required";
+    const normalizedEmail = email.trim();
+
+    if (!normalizedEmail) {
+      next.email = 'Email is required';
+    } else if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
+      next.email = 'Enter a valid email address';
+    }
+
+    if (!password) {
+      next.password = 'Password is required';
+    }
+
     setErrors(next);
-    if (next.email || next.password) return;
+
+    if (next.email || next.password) {
+      return;
+    }
+
     setSubmitting(true);
+
     try {
-      await onSubmit(email.trim(), password);
+      await onSubmit(normalizedEmail, password);
     } catch {
-      setLoginError("Incorrect email or password. Please try again.");
+      setLoginError('Incorrect email or password. Please try again.');
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <main style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#ffffff", fontFamily: "Arial, sans-serif" }}>
-      <div style={{ width: "380px", border: "1.5px solid #111", borderRadius: "10px", background: "#fff", padding: "28px 28px 22px 28px" }}>
-        
-        <div style={{ textAlign: "center", marginBottom: "22px" }}>
-          <h1 style={{ fontSize: "16px", fontWeight: 800, letterSpacing: "0.3px", color: "#222", display: "flex", alignItems: "center", justifyContent: "center", gap: "7px", margin: 0 }}>
-            <span style={{ width: "9px", height: "9px", background: "#222", display: "inline-block" }}></span>
-            INVENTORY APP
-          </h1>
-          <p style={{ marginTop: "6px", fontSize: "13px", color: "#9a9a9a", margin: "6px 0 0 0" }}>Welcome back</p>
-        </div>
+    <main className="ims-login-page">
+      <div className="ims-login-backdrop" aria-hidden="true" />
 
-        <form onSubmit={handleSubmit} noValidate>
-          <div style={{ marginBottom: "12px" }}>
-            <label htmlFor="email" style={{ display: "block", fontSize: "11px", fontWeight: 700, color: "#000", marginBottom: "4px" }}>Email</label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@business.com"
-              style={{ width: "100%", height: "34px", border: "1.5px solid #111", borderRadius: "4px", padding: "0 10px", fontSize: "12px", fontStyle: "italic", color: "#000", outline: "none", boxSizing: "border-box" }}
-            />
-            {errors.email && <p style={{ marginTop: "4px", fontSize: "10px", color: "#d00" }}>{errors.email}</p>}
+      <div className="ims-login-shell">
+        <section className="ims-login-intro" aria-label="Inventory workspace introduction">
+          <div className="ims-login-brand ims-login-brand--light">
+            <span className="ims-login-brand-icon" aria-hidden="true">
+              <Layers3 size={23} strokeWidth={2.1} />
+            </span>
+            <span className="ims-login-brand-name">INVENTORY <span>APP</span></span>
           </div>
 
-          <div style={{ marginBottom: "12px" }}>
-            <label htmlFor="password" style={{ display: "block", fontSize: "11px", fontWeight: 700, color: "#000", marginBottom: "4px" }}>Password</label>
-            <div style={{ position: "relative" }}>
-              <input
-                id="password"
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••••"
-                style={{ width: "100%", height: "34px", border: "1.5px solid #111", borderRadius: "4px", padding: "0 32px 0 10px", fontSize: "12px", outline: "none", boxSizing: "border-box" }}
-              />
-              <span style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)"}}>
-              <button
-                type="button"
-                onClick={toggleVisibility}
-                className="absolute right-3 text-gray-500 hover:text-gray-700 focus:outline-none"
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-                aria-pressed={showPassword}
-                >
-                {showPassword ? (
-                  <EyeOff className="h-5 w-5" aria-hidden="true" />
-                ) : (
-                  <Eye className="h-5 w-5" aria-hidden="true" />
-                )}  
-              </button>
+          <div className="ims-login-intro-content">
+            <span className="ims-login-eyebrow">
+              <span className="ims-login-eyebrow-dot" />
+              INVENTORY OPERATIONS WORKSPACE
+            </span>
+            <h1>Every product.<br /><span>Every movement.</span><br />One clear picture.</h1>
+            <p>
+              A secure workspace for inventory visibility, stock movements,
+              and day-to-day warehouse operations.
+            </p>
 
+            <div className="ims-login-intro-feature">
+              <span className="ims-login-feature-icon" aria-hidden="true">
+                <ShieldCheck size={20} />
               </span>
+              <div>
+                <strong>Role-based access</strong>
+                <span>Built for your team's operational workflow.</span>
+              </div>
             </div>
-            {errors.password && <p style={{ marginTop: "4px", fontSize: "10px", color: "#d00" }}>{errors.password}</p>}
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", margin: "14px 0" }}>
-            <input id="remember" type="checkbox" defaultChecked style={{ width: "14px", height: "14px", accentColor: "#000" }} />
-            <label htmlFor="remember" style={{ fontSize: "11px", color: "#000" }}>Remember me</label>
+          <div className="ims-login-intro-footer">
+            <span className="ims-login-footer-line" />
+            <span>CONTROL · VISIBILITY · ACCOUNTABILITY</span>
           </div>
+        </section>
 
-          <button
-            type="submit"
-            disabled={submitting}
-            style={{ width: "100%", height: "38px", borderRadius: "5px", border: "none", background: "#3566a3", color: "#fff", fontSize: "13px", fontWeight: 700, cursor: "pointer", opacity: submitting ? 0.6 : 1 }}
-          >
-            {submitting ? "Signing in..." : "Sign In"}
-          </button>
+        <section className="ims-login-form-panel" aria-labelledby="ims-login-title">
+          <div className="ims-login-form-inner">
+            <div className="ims-login-mobile-brand">
+              <span className="ims-login-brand-icon" aria-hidden="true">
+                <Layers3 size={21} />
+              </span>
+              <span className="ims-login-brand-name">INVENTORY <span>APP</span></span>
+            </div>
 
-          <div style={{ textAlign: "center", marginTop: "10px" }}>
-            <Link
-              to="/forgot-password"
-              style={{
-                fontSize: '11px',
-                fontWeight: 700,
-                color: '#3566a3',
-                textDecoration: 'none',
-              }}
-            >
-              Forgot password?
-            </Link>
+            <div className="ims-login-form-heading">
+              <span className="ims-login-form-kicker">WELCOME BACK</span>
+              <h2 id="ims-login-title">Sign in to your account</h2>
+              <p>Enter your credentials to access your workspace.</p>
+            </div>
+
+            <form onSubmit={handleSubmit} noValidate className="ims-login-form">
+              <div className="ims-login-field">
+                <label htmlFor="email">Email address</label>
+                <div className={`ims-login-input-wrap${errors.email ? ' ims-login-input-wrap--invalid' : ''}`}>
+                  <Mail size={18} aria-hidden="true" className="ims-login-input-icon" />
+                  <input
+                    id="email"
+                    type="email"
+                    autoComplete="username"
+                    value={email}
+                    onChange={(event) => {
+                      setEmail(event.target.value);
+                      if (errors.email) setErrors((current) => ({ ...current, email: undefined }));
+                    }}
+                    placeholder="you@business.com"
+                    aria-invalid={Boolean(errors.email)}
+                    aria-describedby={errors.email ? 'ims-login-email-error' : undefined}
+                    disabled={submitting}
+                  />
+                </div>
+                {errors.email && (
+                  <p id="ims-login-email-error" className="ims-login-field-error" role="alert">
+                    {errors.email}
+                  </p>
+                )}
+              </div>
+
+              <div className="ims-login-field">
+                <div className="ims-login-field-heading">
+                  <label htmlFor="password">Password</label>
+                  <Link to="/forgot-password" className="ims-login-forgot">Forgot password?</Link>
+                </div>
+                <div className={`ims-login-input-wrap${errors.password ? ' ims-login-input-wrap--invalid' : ''}`}>
+                  <LockKeyhole size={18} aria-hidden="true" className="ims-login-input-icon" />
+                  <input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(event) => {
+                      setPassword(event.target.value);
+                      if (errors.password) setErrors((current) => ({ ...current, password: undefined }));
+                    }}
+                    placeholder="Enter your password"
+                    aria-invalid={Boolean(errors.password)}
+                    aria-describedby={errors.password ? 'ims-login-password-error' : undefined}
+                    disabled={submitting}
+                  />
+                  <button
+                    type="button"
+                    className="ims-login-visibility"
+                    onClick={toggleVisibility}
+                    disabled={submitting}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    aria-pressed={showPassword}
+                  >
+                    {showPassword ? <EyeOff size={19} aria-hidden="true" /> : <Eye size={19} aria-hidden="true" />}
+                  </button>
+                </div>
+                {errors.password && (
+                  <p id="ims-login-password-error" className="ims-login-field-error" role="alert">
+                    {errors.password}
+                  </p>
+                )}
+              </div>
+
+              <label className="ims-login-remember">
+                <input type="checkbox" defaultChecked />
+                <span>Remember me</span>
+              </label>
+
+              {loginError && (
+                <div className="ims-login-auth-error" role="alert">
+                  <span className="ims-login-error-dot" aria-hidden="true" />
+                  <span>{loginError}</span>
+                </div>
+              )}
+
+              <button type="submit" className="ims-login-submit" disabled={submitting}>
+                <span>{submitting ? 'Signing in…' : 'Sign in'}</span>
+                {!submitting && <ArrowRight size={18} aria-hidden="true" />}
+                {submitting && <span className="ims-login-spinner" aria-hidden="true" />}
+              </button>
+            </form>
+
+            <div className="ims-login-form-footnote">
+              <CheckCircle2 size={16} aria-hidden="true" />
+              <span>Secure access to your inventory workspace</span>
+            </div>
           </div>
-
-          <div style={{ marginTop: "16px", borderTop: "1px solid #e6e6e6", paddingTop: "10px" }}>
-            {loginError ? (
-              <p style={{ fontSize: "10px", color: "#d00" }}>⚠ {loginError}</p>
-            ) : (
-              <p style={{ fontSize: "10px", fontStyle: "italic", color: "#999" }}>⚠ Authentication error appears here</p>
-            )}
-          </div>
-        </form>
+        </section>
       </div>
     </main>
   );

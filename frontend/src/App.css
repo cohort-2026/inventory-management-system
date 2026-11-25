@@ -2929,6 +2929,179 @@
 .f08-review-queue .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px}
 @media(max-width:390px){.f08-review-queue{padding:14px}.f08-review-queue__header>.btn{width:100%}.f08-review-queue__item{align-items:stretch}.f08-review-queue__status{width:max-content}.f08-review-queue__item>.btn{width:100%}}
 
+/* ================================================================
+   Enterprise Blue — Login Screen
+   Scoped to .ims-login-* to protect other application pages.
+   Append to frontend/src/App.css (do not replace existing CSS).
+   ================================================================ */
+
+.ims-login-page {
+  --ims-login-navy: #16273d;
+  --ims-login-blue: #3976b9;
+  --ims-login-ink: #1c2b3f;
+  --ims-login-muted: #708096;
+  min-height: 100vh;
+  min-height: 100dvh;
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  padding: 36px 24px;
+  background: #f0f4f9;
+  color: var(--ims-login-ink);
+  font-family: 'IBM Plex Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.ims-login-page *,
+.ims-login-page *::before,
+.ims-login-page *::after { box-sizing: border-box; }
+
+.ims-login-backdrop {
+  pointer-events: none;
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 47% 55% at 7% 8%, rgba(65, 128, 205, .13), transparent 75%),
+    radial-gradient(ellipse 41% 51% at 94% 93%, rgba(75, 119, 173, .13), transparent 72%),
+    linear-gradient(145deg, #edf3fa 0%, #f8fafc 55%, #edf3fa 100%);
+}
+
+.ims-login-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1.04fr) minmax(0, 1fr);
+  width: min(100%, 1040px);
+  min-height: 620px;
+  background: #ffffff;
+  border: 1px solid #dbe5ef;
+  border-radius: 20px;
+  box-shadow: 0 24px 70px rgba(20, 43, 75, .12), 0 5px 16px rgba(20, 43, 75, .05);
+  overflow: hidden;
+}
+
+.ims-login-intro {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 43px 47px 35px;
+  background: linear-gradient(142deg, #16273d 6%, #1c3554 57%, #285287 100%);
+  color: #fff;
+}
+
+.ims-login-intro::before {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  top: 45%;
+  right: -150px;
+  width: 440px;
+  height: 440px;
+  border: 1px solid rgba(200, 222, 252, .10);
+  border-radius: 50%;
+  box-shadow: 0 0 0 78px rgba(200, 222, 252, .035), 0 0 0 155px rgba(200, 222, 252, .023);
+}
+
+.ims-login-intro::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse 80% 55% at 100% 0%, rgba(100, 164, 255, .13), transparent 70%);
+}
+
+.ims-login-intro > * { position: relative; z-index: 1; }
+.ims-login-brand { display: inline-flex; align-items: center; gap: 12px; }
+.ims-login-brand-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 43px;
+  height: 43px;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 11px;
+  background: linear-gradient(150deg, #4e99e2, #3264a6);
+  color: #fff;
+  box-shadow: 0 7px 18px rgba(8, 23, 45, .15);
+}
+.ims-login-brand-name { font-size: 14px; font-weight: 800; letter-spacing: .075em; white-space: nowrap; }
+.ims-login-brand--light .ims-login-brand-name { color: #fff; }
+.ims-login-brand-name span { font-weight: 400; opacity: .75; }
+
+.ims-login-intro-content { max-width: 390px; padding: 50px 0; }
+.ims-login-eyebrow { display: inline-flex; align-items: center; gap: 10px; color: #a3c9f8; font-size: 10px; font-weight: 700; letter-spacing: .14em; }
+.ims-login-eyebrow-dot { display: block; width: 7px; height: 7px; border-radius: 50%; background: #78b5ff; box-shadow: 0 0 0 4px rgba(120, 181, 255, .12); }
+.ims-login-intro h1 { margin: 21px 0 19px; color: #fff; font-size: clamp(31px, 3.1vw, 43px); line-height: 1.15; font-weight: 700; letter-spacing: -.045em; }
+.ims-login-intro h1 span { color: #8abfff; }
+.ims-login-intro-content > p { margin: 0; color: #bdcce0; font-size: 14px; line-height: 1.85; }
+.ims-login-intro-feature { display: flex; align-items: center; gap: 13px; margin-top: 36px; padding: 17px 18px; border: 1px solid rgba(193, 218, 247, .14); background: rgba(255,255,255,.055); border-radius: 12px; }
+.ims-login-feature-icon { width: 37px; height: 37px; display: grid; place-items: center; flex: none; border-radius: 9px; background: rgba(112, 177, 255, .16); color: #a6d0ff; }
+.ims-login-intro-feature strong, .ims-login-intro-feature span { display: block; }
+.ims-login-intro-feature strong { color: #f5faff; font-size: 12px; margin-bottom: 4px; }
+.ims-login-intro-feature div > span { color: #afc1d9; font-size: 11px; line-height: 1.5; }
+.ims-login-intro-footer { display: flex; align-items: center; gap: 12px; color: #90a9c9; font-size: 9px; font-weight: 700; letter-spacing: .14em; }
+.ims-login-footer-line { width: 27px; height: 1px; background: #77a9e8; }
+
+.ims-login-form-panel { display: flex; align-items: center; justify-content: center; padding: 54px clamp(32px, 5vw, 68px); }
+.ims-login-form-inner { width: 100%; max-width: 375px; }
+.ims-login-mobile-brand { display: none; }
+.ims-login-form-heading { margin-bottom: 35px; }
+.ims-login-form-kicker { display: block; color: var(--ims-login-blue); font-size: 10px; font-weight: 800; letter-spacing: .15em; margin-bottom: 12px; }
+.ims-login-form-heading h2 { margin: 0 0 10px; color: var(--ims-login-ink); font-size: clamp(23px, 2.4vw, 29px); font-weight: 750; letter-spacing: -.04em; line-height: 1.2; }
+.ims-login-form-heading p { margin: 0; color: var(--ims-login-muted); line-height: 1.65; font-size: 13px; }
+.ims-login-form { display: flex; flex-direction: column; gap: 19px; }
+.ims-login-field { display: flex; flex-direction: column; gap: 9px; }
+.ims-login-field > label, .ims-login-field-heading > label { color: #2c3b4e; font-size: 12px; font-weight: 700; }
+.ims-login-field-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ims-login-forgot { color: #326ba9; text-decoration: none; font-size: 11px; font-weight: 700; }
+.ims-login-forgot:hover { color: #1e5187; text-decoration: underline; }
+.ims-login-input-wrap { display: flex; align-items: center; width: 100%; height: 48px; border: 1px solid #d6e0eb; border-radius: 9px; background: #fbfcfe; transition: border-color .16s, box-shadow .16s, background .16s; }
+.ims-login-input-wrap:focus-within { border-color: #4b91dc; background: #fff; box-shadow: 0 0 0 3px rgba(57,118,185,.12); }
+.ims-login-input-wrap--invalid { border-color: #cf5a5a; }
+.ims-login-input-wrap--invalid:focus-within { border-color: #cf5a5a; box-shadow: 0 0 0 3px rgba(207,90,90,.1); }
+.ims-login-input-icon { flex: none; margin-left: 14px; color: #8899ad; }
+.ims-login-input-wrap input { display: block; flex: 1; min-width: 0; width: 100%; height: 100%; padding: 0 12px; border: 0; border-radius: 9px; background: transparent; outline: none; box-shadow: none; font: inherit; font-size: 13px; color: #24354b; }
+.ims-login-input-wrap input::placeholder { color: #98a5b6; }
+.ims-login-input-wrap input:disabled { cursor: not-allowed; opacity: .7; }
+.ims-login-visibility { flex: none; display: grid; place-items: center; width: 42px; height: 42px; margin-right: 3px; padding: 0; background: transparent; border: 0; border-radius: 7px; color: #8091a6; cursor: pointer; }
+.ims-login-visibility:hover { color: #326ba9; background: #eef5fd; }
+.ims-login-visibility:focus-visible, .ims-login-submit:focus-visible, .ims-login-forgot:focus-visible { outline: 3px solid rgba(57,118,185,.45); outline-offset: 3px; }
+.ims-login-visibility:disabled { opacity: .6; cursor: not-allowed; }
+.ims-login-field-error { margin: -3px 0 0; color: #b52d39; font-size: 11px; line-height: 1.45; }
+.ims-login-remember { display: inline-flex; width: fit-content; align-items: center; gap: 9px; color: #56677c; font-size: 12px; cursor: pointer; margin-top: -3px; }
+.ims-login-remember input { width: 15px; height: 15px; margin: 0; accent-color: #3976b9; }
+.ims-login-auth-error { display: flex; align-items: flex-start; gap: 10px; padding: 11px 12px; color: #ae2835; background: #fff3f4; border: 1px solid #f3d3d7; border-radius: 8px; font-size: 12px; line-height: 1.5; }
+.ims-login-error-dot { width: 7px; height: 7px; flex: none; margin-top: 6px; border-radius: 50%; background: #c53948; }
+.ims-login-submit { display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 48px; padding: 12px 20px; border: 0; border-radius: 9px; background: linear-gradient(100deg, #2d6099 0%, #397fc4 100%); box-shadow: 0 7px 17px rgba(46, 95, 151, .18); color: #fff; font: inherit; font-size: 13px; font-weight: 750; cursor: pointer; transition: transform .15s, box-shadow .15s, filter .15s; }
+.ims-login-submit:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 9px 20px rgba(46, 95, 151, .25); filter: brightness(1.03); }
+.ims-login-submit:disabled { cursor: progress; opacity: .7; }
+.ims-login-spinner { display: block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff; border-radius: 50%; animation: ims-login-spin .7s linear infinite; }
+@keyframes ims-login-spin { to { transform: rotate(360deg); } }
+.ims-login-form-footnote { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 28px; color: #8a98a9; font-size: 11px; text-align: center; }
+.ims-login-form-footnote svg { flex: none; color: #4d946b; }
+
+@media (max-width: 780px) {
+  .ims-login-page { padding: 22px 16px; }
+  .ims-login-shell { max-width: 500px; min-height: auto; grid-template-columns: minmax(0, 1fr); }
+  .ims-login-intro { display: none; }
+  .ims-login-form-panel { padding: 44px 36px 38px; }
+  .ims-login-mobile-brand { display: inline-flex; align-items: center; gap: 10px; margin-bottom: 45px; }
+  .ims-login-mobile-brand .ims-login-brand-name { color: #233c5d; }
+  .ims-login-form-heading { margin-bottom: 27px; }
+}
+@media (max-width: 420px) {
+  .ims-login-page { padding: 12px; }
+  .ims-login-shell { border-radius: 14px; }
+  .ims-login-form-panel { padding: 30px 23px 32px; }
+  .ims-login-mobile-brand { margin-bottom: 34px; }
+  .ims-login-form-heading h2 { font-size: 23px; }
+  .ims-login-field-heading { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ims-login-page .ims-login-submit, .ims-login-page .ims-login-input-wrap { transition: none; }
+  .ims-login-spinner { animation-duration: 1.5s; }
 
 /* =========================================
    INCOMING TRANSFERS
