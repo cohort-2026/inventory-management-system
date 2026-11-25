@@ -35,6 +35,7 @@ import Suppliers from "./pages/Suppliers";
 import Receiving from "./pages/Receiving";
 import ReceivingDetail from "./pages/ReceivingDetail";
 import Reorder from "./pages/Reorder";
+import IncomingTransfers from "./pages/IncomingTransfers";
 
 function LegacyInventoryRedirect() {
   const location = useLocation();
@@ -236,6 +237,23 @@ function App() {
               </ProtectedRoute>
             }
           />
+
+          <Route
+            path="/incoming-transfers"
+            element={
+             <ProtectedRoute allowedRoles={["Manager", "Inventory Staff"]}>
+             <IncomingTransfers />
+             </ProtectedRoute>
+            }
+         />
+         <Route
+          path="/transfer_stock"
+          element={
+           <ProtectedRoute allowedRoles={["Manager"]}>
+           <TransferStock />
+           </ProtectedRoute>
+          }
+        />
 
           <Route path="*" element={<NotFound />} />
         </Routes>
