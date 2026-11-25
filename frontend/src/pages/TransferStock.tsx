@@ -11,11 +11,17 @@ import {
   fetchAllTransferInventory,
   fetchTransferOptions,
   submitStockTransfer,
+  fetchPendingTransfers,
+  fetchTransferDetails,
+  receiveStockTransfer,
+  cancelStockTransfer,
   TransferApiError,
 } from '../services/transferStockApi';
 import type {
   TransferInventoryRow,
   TransferResult,
+  PendingTransfer,
+  TransferDetails,
 } from '../services/transferStockApi';
 
 type Step = 'form' | 'review' | 'done';
@@ -23,6 +29,13 @@ type Step = 'form' | 'review' | 'done';
 type FormErrors = Partial<
   Record<'product' | 'from' | 'to' | 'quantity' | 'note', string>
 >;
+
+type WriteOffReason = {
+  reason_code_id: string;
+  code: string;
+  label: string;
+  requires_note: boolean;
+};
 
 function readableError(error: unknown): string {
   return error instanceof Error
@@ -34,6 +47,13 @@ function validPositiveDecimal(text: string): boolean {
   return (
     /^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(text) &&
     /[1-9]/.test(text) &&
+    text.length <= 100
+  );
+}
+
+function validNonNegativeDecimal(text: string): boolean {
+  return (
+    /^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(text) &&
     text.length <= 100
   );
 }
@@ -65,18 +85,14 @@ function compareDecimal(a: string, b: string): number {
     .localeCompare(bf.padEnd(length, '0'));
 }
 
-function addDecimal(
-  a: string,
-  b: string,
-  subtract = false,
-): string {
+function addDecimal(a: string, b: string, subtract = false): string {
   const [, af] = normalizedDecimal(a);
   const [, bf] = normalizedDecimal(b);
   const scale = Math.max(af.length, bf.length);
 
-  const toInt = (s: string) => {
-    const [whole, frac] = normalizedDecimal(s);
-    return BigInt(whole + frac.padEnd(scale, '0'));
+  const toInt = (value: string) => {
+    const [whole, fraction] = normalizedDecimal(value);
+    return BigInt(whole + fraction.padEnd(scale, '0'));
   };
 
   const result = subtract
@@ -94,28 +110,67 @@ function addDecimal(
     : '';
 
   return `${negative ? '-' : ''}${whole}${
-    fractional ? '.' + fractional : ''
+    fractional ? `.${fractional}` : ''
   }`;
+}
+
+async function fetchWriteOffReasons(): Promise<WriteOffReason[]> {
+  const apiBase = `${import.meta.env.VITE_API_URL ?? 'http://localhost:5000'}/api`;
+
+  const response = await fetch(
+    `${apiBase}/reason-codes?movement_type=WRITE_OFF`,
+    {
+      credentials: 'include',
+      cache: 'no-store',
+      headers: { Accept: 'application/json' },
+    },
+  );
+
+  const payload: unknown = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const message =
+      typeof payload === 'object' &&
+      payload !== null &&
+      'error' in payload &&
+      typeof payload.error === 'string'
+        ? payload.error
+        : `Unable to load write-off reasons (HTTP ${response.status}).`;
+
+    throw new Error(message);
+  }
+
+  if (
+    typeof payload !== 'object' ||
+    payload === null ||
+    !('reason_codes' in payload) ||
+    !Array.isArray(payload.reason_codes)
+  ) {
+    throw new Error('The write-off reason API returned an invalid response.');
+  }
+
+  return payload.reason_codes as WriteOffReason[];
 }
 
 export default function TransferStock() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
 
-  // Optional values supplied by the replenishment page.
   const requestedProductId = searchParams.get('product_id') ?? '';
   const requestedFromId = searchParams.get('from_location_id') ?? '';
   const requestedToId = searchParams.get('to_location_id') ?? '';
   const requestedQuantity = searchParams.get('quantity') ?? '';
 
-  const canTransfer =
-    user?.roleName === 'Manager' ||
-    user?.roleName === 'Inventory Staff';
+  const isManager = user?.roleName === 'Manager';
+  const canReceive =
+    isManager || user?.roleName === 'Inventory Staff';
+  const canAccess = canReceive;
 
   const [step, setStep] = useState<Step>('form');
   const [products, setProducts] = useState<ProductOption[]>([]);
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [inventory, setInventory] = useState<TransferInventoryRow[]>([]);
+  const [pendingTransfers, setPendingTransfers] = useState<PendingTransfer[]>([]);
 
   const [productId, setProductId] = useState('');
   const [fromId, setFromId] = useState('');
@@ -129,6 +184,20 @@ export default function TransferStock() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState<TransferResult | null>(null);
 
+  const [selectedTransfer, setSelectedTransfer] =
+    useState<TransferDetails | null>(null);
+  const [writeOffReasons, setWriteOffReasons] = useState<WriteOffReason[]>([]);
+  const [receivedQuantities, setReceivedQuantities] = useState<
+    Record<string, string>
+  >({});
+  const [shortageReasons, setShortageReasons] = useState<
+    Record<string, string>
+  >({});
+  const [shortageNotes, setShortageNotes] = useState<
+    Record<string, string>
+  >({});
+  const [receiving, setReceiving] = useState(false);
+
   const submitting = useRef(false);
 
   const load = useCallback(
@@ -138,80 +207,78 @@ export default function TransferStock() {
 
       try {
         if (reloadOptions) {
-          const [opts, records] = await Promise.all([
-            fetchTransferOptions(),
-            fetchAllTransferInventory(),
-          ]);
+          // Save products and locations before loading pending transfers.
+          // A pending-transfer failure will no longer erase product options.
+          const opts = await fetchTransferOptions();
 
           setProducts(opts.products);
           setLocations(opts.locations);
 
-          setProductId((currentProductId) => {
-            const requestedExists = opts.products.some(
-              (product) =>
-                product.product_id === requestedProductId,
-            );
-
-            if (requestedExists) {
+          setProductId((current) => {
+            if (
+              requestedProductId &&
+              opts.products.some(
+                (item) => item.product_id === requestedProductId,
+              )
+            ) {
               return requestedProductId;
             }
 
-            const currentExists = opts.products.some(
-              (product) =>
-                product.product_id === currentProductId,
-            );
-
-            return currentExists
-              ? currentProductId
+            return opts.products.some(
+              (item) => item.product_id === current,
+            )
+              ? current
               : opts.products[0]?.product_id ?? '';
           });
 
-          setFromId((currentFromId) => {
-            const requestedExists = opts.locations.some(
-              (location) =>
-                location.location_id === requestedFromId,
-            );
-
-            if (requestedFromId && requestedExists) {
+          setFromId((current) => {
+            if (
+              requestedFromId &&
+              opts.locations.some(
+                (item) => item.location_id === requestedFromId,
+              )
+            ) {
               return requestedFromId;
             }
 
             return opts.locations.some(
-              (location) =>
-                location.location_id === currentFromId,
+              (item) => item.location_id === current,
             )
-              ? currentFromId
+              ? current
               : opts.locations[0]?.location_id ?? '';
           });
 
-          setToId((currentToId) => {
-            const requestedExists = opts.locations.some(
-              (location) =>
-                location.location_id === requestedToId,
-            );
-
-            if (requestedToId && requestedExists) {
+          setToId((current) => {
+            if (
+              requestedToId &&
+              opts.locations.some(
+                (item) => item.location_id === requestedToId,
+              )
+            ) {
               return requestedToId;
             }
 
             return opts.locations.some(
-              (location) =>
-                location.location_id === currentToId,
+              (item) => item.location_id === current,
             )
-              ? currentToId
+              ? current
               : opts.locations[1]?.location_id ??
-                opts.locations[0]?.location_id ??
-                '';
+                  opts.locations[0]?.location_id ??
+                  '';
           });
 
           if (validPositiveDecimal(requestedQuantity)) {
             setQuantity(requestedQuantity);
           }
-
-          setInventory(records);
-        } else {
-          setInventory(await fetchAllTransferInventory());
         }
+
+        const [records, pending] = await Promise.all([
+          fetchAllTransferInventory(),
+          fetchPendingTransfers(),
+        ]);
+
+        setInventory(records);
+        setPendingTransfers(pending);
 
         return true;
       } catch (caught) {
@@ -230,7 +297,7 @@ export default function TransferStock() {
   );
 
   useEffect(() => {
-    if (!canTransfer) return;
+    if (!canAccess) return;
 
     let cancelled = false;
 
@@ -243,7 +310,7 @@ export default function TransferStock() {
     return () => {
       cancelled = true;
     };
-  }, [canTransfer, load]);
+  }, [canAccess, load]);
 
   const selectedProduct = products.find(
     (product) => product.product_id === productId,
@@ -265,7 +332,6 @@ export default function TransferStock() {
     )?.quantity ?? '0';
 
   const fromBefore = stockAt(fromId);
-  const toBefore = stockAt(toId);
   const amountValid = validPositiveDecimal(quantity);
 
   const tooMuch = Boolean(
@@ -279,20 +345,11 @@ export default function TransferStock() {
       ? addDecimal(fromBefore, quantity, true)
       : '—';
 
-  const toAfter =
-    productId && toId && amountValid
-      ? addDecimal(toBefore, quantity)
-      : '—';
-
   const blockingError = useMemo(() => {
-    if (!products.length) {
-      return 'No active products are available.';
-    }
-
+    if (!products.length) return 'No active products are available.';
     if (locations.length < 2) {
-      return 'Two active locations are required to transfer stock.';
+      return 'Two active locations are required to dispatch stock.';
     }
-
     return '';
   }, [locations.length, products.length]);
 
@@ -317,8 +374,8 @@ export default function TransferStock() {
 
     if (!validPositiveDecimal(quantity)) {
       next.quantity = 'Enter a positive decimal quantity.';
-    } else if (fromId && tooMuch) {
-      next.quantity = `Cannot transfer ${quantity}; only ${fromBefore} in stock at this location.`;
+    } else if (tooMuch) {
+      next.quantity = `Cannot dispatch ${quantity}; only ${fromBefore} in stock at this location.`;
     }
 
     if (note.trim().length > 2000) {
@@ -338,14 +395,13 @@ export default function TransferStock() {
     if (Object.keys(next).length) return;
 
     const loaded = await load(false);
-
     if (!loaded) return;
 
     setStep('review');
   }
 
-  async function confirm() {
-    if (submitting.current || saving || loading) return;
+  async function confirmDispatch() {
+    if (!isManager || submitting.current || saving || loading) return;
 
     submitting.current = true;
     setSaving(true);
@@ -362,14 +418,12 @@ export default function TransferStock() {
 
       setSuccess(result);
       setStep('done');
+      await load(false);
     } catch (caught) {
       const message = readableError(caught);
       setError(message);
 
-      if (
-        caught instanceof TransferApiError &&
-        caught.status === 409
-      ) {
+      if (caught instanceof TransferApiError && caught.status === 409) {
         try {
           setInventory(await fetchAllTransferInventory());
         } catch (refreshError) {
@@ -384,12 +438,141 @@ export default function TransferStock() {
     }
   }
 
-  if (!canTransfer) {
+  async function openTransfer(transferId: string) {
+    setError('');
+    setReceiving(true);
+
+    try {
+      const [details, reasons] = await Promise.all([
+        fetchTransferDetails(transferId),
+        fetchWriteOffReasons(),
+      ]);
+
+      setSelectedTransfer(details);
+      setWriteOffReasons(reasons);
+
+      const initialQuantities: Record<string, string> = {};
+      const initialReasons: Record<string, string> = {};
+      const initialNotes: Record<string, string> = {};
+
+      for (const line of details.lines) {
+        initialQuantities[line.transfer_line_id] = line.quantity_sent;
+        initialReasons[line.transfer_line_id] =
+          line.shortage_reason_code_id ?? '';
+        initialNotes[line.transfer_line_id] = line.shortage_note ?? '';
+      }
+
+      setReceivedQuantities(initialQuantities);
+      setShortageReasons(initialReasons);
+      setShortageNotes(initialNotes);
+    } catch (caught) {
+      setError(readableError(caught));
+    } finally {
+      setReceiving(false);
+    }
+  }
+
+  async function confirmReceipt() {
+    if (!selectedTransfer || receiving) return;
+
+    const lines = selectedTransfer.lines;
+    const bodyLines: Array<{
+      product_id: string;
+      quantity_received: string;
+      shortage_reason_code_id: string | null;
+      shortage_note: string | null;
+    }> = [];
+
+    for (const line of lines) {
+      const id = line.transfer_line_id;
+      const received = receivedQuantities[id] ?? '';
+
+      if (!validNonNegativeDecimal(received)) {
+        setError(`Enter a valid received quantity for ${line.product_name}.`);
+        return;
+      }
+
+      if (compareDecimal(received, line.quantity_sent) > 0) {
+        setError(
+          `Received quantity for ${line.product_name} cannot exceed the sent quantity.`,
+        );
+        return;
+      }
+
+      const isShort = compareDecimal(received, line.quantity_sent) < 0;
+      const reasonId = shortageReasons[id] ?? '';
+      const reason = writeOffReasons.find(
+        (item) => item.reason_code_id === reasonId,
+      );
+      const shortageNote = (shortageNotes[id] ?? '').trim();
+
+      if (isShort && !reason) {
+        setError(`Select a write-off reason for ${line.product_name}.`);
+        return;
+      }
+
+      if (isShort && !shortageNote) {
+        setError(`Enter a note for the shortage of ${line.product_name}.`);
+        return;
+      }
+
+      bodyLines.push({
+        product_id: line.product_id,
+        quantity_received: received,
+        shortage_reason_code_id: isShort ? reasonId : null,
+        shortage_note: isShort ? shortageNote : null,
+      });
+    }
+
+    setReceiving(true);
+    setError('');
+
+    try {
+      await receiveStockTransfer(selectedTransfer.transfer_id, {
+        lines: bodyLines,
+      });
+
+      setSelectedTransfer(null);
+      setReceivedQuantities({});
+      setShortageReasons({});
+      setShortageNotes({});
+      await load(false);
+    } catch (caught) {
+      setError(readableError(caught));
+    } finally {
+      setReceiving(false);
+    }
+  }
+
+  async function cancelTransfer(transferId: string) {
+    if (!isManager || receiving) return;
+
+    const confirmed = window.confirm(
+      'Cancel this in-transit transfer? The dispatched stock will be returned to the source location.',
+    );
+
+    if (!confirmed) return;
+
+    setReceiving(true);
+    setError('');
+
+    try {
+      await cancelStockTransfer(transferId);
+      setSelectedTransfer(null);
+      await load(false);
+    } catch (caught) {
+      setError(readableError(caught));
+    } finally {
+      setReceiving(false);
+    }
+  }
+
+  if (!canAccess) {
     return (
       <AppLayout>
         <PageHeader title="Transfer Stock" />
         <p role="alert" className="field-error">
-          You do not have permission to transfer stock.
+          You do not have permission to access stock transfers.
         </p>
         <Link to="/inventory_overview" className="btn btn-secondary">
           Return to inventory
@@ -404,20 +587,8 @@ export default function TransferStock() {
     <AppLayout>
       <PageHeader
         title="Transfer Stock"
-        subtitle="Move stock between locations in two steps."
+        subtitle="Dispatch stock between locations, then confirm what was received."
       />
-
-      <div
-        aria-label="Transfer progress"
-        className="field-hint"
-        style={{ marginBottom: 'var(--space-4)' }}
-      >
-        {step === 'form'
-          ? 'Step 1 of 2 — Enter details'
-          : step === 'review'
-            ? 'Step 2 of 2 — Review and confirm'
-            : 'Transfer complete'}
-      </div>
 
       {error && (
         <p
@@ -429,447 +600,603 @@ export default function TransferStock() {
         </p>
       )}
 
-      {loading && <p role="status">Loading inventory…</p>}
+      {loading && <p role="status">Loading transfers and inventory…</p>}
 
-      {!loading && blockingError && step !== 'done' && (
-        <p role="alert" className="field-error">
-          {blockingError}
-        </p>
-      )}
-
-      {step === 'form' && !loading && !blockingError && (
-        <div className="form-with-sidebar transfer-stock-page">
-          <form
-            className="stock-movement-form"
-            onSubmit={(event) => void review(event)}
-            noValidate
-          >
-            <div className="field">
-              <label className="field-label" htmlFor="transfer-product">
-                Product *
-              </label>
-
-              <select
-                id="transfer-product"
-                className="field-select"
-                value={productId}
-                onChange={(event) => {
-                  setProductId(event.target.value);
-                  setErrors({});
-                }}
-                aria-invalid={Boolean(fieldError('product'))}
-                aria-describedby={
-                  fieldError('product')
-                    ? 'transfer-product-error'
-                    : undefined
-                }
-                required
-              >
-                <option value="">Select a product</option>
-
-                {products.map((product) => (
-                  <option
-                    key={product.product_id}
-                    value={product.product_id}
-                  >
-                    {product.name} ({product.sku})
-                  </option>
-                ))}
-              </select>
-
-              {fieldError('product') && (
-                <p
-                  id="transfer-product-error"
-                  className="field-error"
-                  role="alert"
-                >
-                  {fieldError('product')}
-                </p>
-              )}
-            </div>
-
-            <div className="field-row">
-              <div className="field">
-                <label className="field-label" htmlFor="transfer-from">
-                  From location *
-                </label>
-
-                <select
-                  id="transfer-from"
-                  className="field-select"
-                  value={fromId}
-                  onChange={(event) => {
-                    setFromId(event.target.value);
-                    setErrors({});
-                  }}
-                  aria-invalid={Boolean(fieldError('from'))}
-                  aria-describedby={
-                    fieldError('from')
-                      ? 'transfer-from-error'
-                      : 'transfer-source-hint'
-                  }
-                  required
-                >
-                  <option value="">Select source</option>
-
-                  {locations.map((location) => (
-                    <option
-                      key={location.location_id}
-                      value={location.location_id}
-                    >
-                      {location.name}
-                    </option>
-                  ))}
-                </select>
-
-                {fieldError('from') && (
-                  <p
-                    id="transfer-from-error"
-                    role="alert"
-                    className="field-error"
-                  >
-                    {fieldError('from')}
+      {!loading && (
+        <>
+          {canReceive && (
+            <section style={{ marginBottom: 'var(--space-5)' }}>
+              <Card title="Transfers to receive">
+                {pendingTransfers.length === 0 ? (
+                  <p className="field-hint">
+                    There are currently no transfers waiting to be received.
                   </p>
+                ) : (
+                  <div className="table-responsive">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Transfer</th>
+                          <th>From</th>
+                          <th>To</th>
+                          <th>Items</th>
+                          <th>Status</th>
+                          <th>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pendingTransfers.map((transfer) => (
+                          <tr key={transfer.transfer_id}>
+                            <td>
+                              <strong>{transfer.transfer_no}</strong>
+                            </td>
+                            <td>{transfer.from_location_name}</td>
+                            <td>{transfer.to_location_name}</td>
+                            <td>{transfer.line_count}</td>
+                            <td>{transfer.status}</td>
+                            <td>
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                disabled={receiving}
+                                onClick={() =>
+                                  void openTransfer(transfer.transfer_id)
+                                }
+                              >
+                                Receive
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
-              </div>
+              </Card>
+            </section>
+          )}
 
-              <div className="field">
-                <label className="field-label" htmlFor="transfer-to">
-                  To location *
-                </label>
-
-                <select
-                  id="transfer-to"
-                  className="field-select"
-                  value={toId}
-                  onChange={(event) => {
-                    setToId(event.target.value);
-                    setErrors({});
-                  }}
-                  aria-invalid={Boolean(fieldError('to'))}
-                  aria-describedby={
-                    fieldError('to')
-                      ? 'transfer-to-error'
-                      : undefined
-                  }
-                  required
-                >
-                  <option value="">Select destination</option>
-
-                  {locations.map((location) => (
-                    <option
-                      key={location.location_id}
-                      value={location.location_id}
-                    >
-                      {location.name}
-                    </option>
-                  ))}
-                </select>
-
-                {fieldError('to') && (
-                  <p
-                    id="transfer-to-error"
-                    role="alert"
-                    className="field-error"
-                  >
-                    {fieldError('to')}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <p
-              className="field-hint"
-              id="transfer-source-hint"
-              style={{ marginBottom: 'var(--space-4)' }}
+          {selectedTransfer && (
+            <section
+              className="card"
+              aria-label="Receive stock transfer"
+              style={{ marginBottom: 'var(--space-5)' }}
             >
-              Available at source:{' '}
-              <span className="mono">
-                {productId && fromId ? fromBefore : '—'}
-              </span>
-            </p>
+              <div className="card-body">
+                <h2 className="form-section-title">
+                  Receive transfer {selectedTransfer.transfer_no}
+                </h2>
 
-            <div className="field">
-              <label className="field-label" htmlFor="transfer-quantity">
-                Quantity *
-              </label>
-
-              <input
-                id="transfer-quantity"
-                className="field-input"
-                type="text"
-                inputMode="decimal"
-                value={quantity}
-                onChange={(event) => {
-                  setQuantity(event.target.value);
-                  setErrors({});
-                }}
-                aria-invalid={Boolean(fieldError('quantity'))}
-                aria-describedby={
-                  fieldError('quantity')
-                    ? 'transfer-quantity-error'
-                    : 'transfer-quantity-hint'
-                }
-                required
-              />
-
-              <p id="transfer-quantity-hint" className="field-hint">
-                Enter a positive quantity. Decimals are supported.
-              </p>
-
-              {fieldError('quantity') && (
-                <p
-                  id="transfer-quantity-error"
-                  className="field-error"
-                  role="alert"
-                >
-                  {fieldError('quantity')}
-                </p>
-              )}
-            </div>
-
-            <div className="field">
-              <label className="field-label" htmlFor="transfer-note">
-                Note (optional)
-              </label>
-
-              <textarea
-                id="transfer-note"
-                className="field-textarea"
-                maxLength={2000}
-                value={note}
-                onChange={(event) => {
-                  setNote(event.target.value);
-                  setErrors({});
-                }}
-                aria-invalid={Boolean(fieldError('note'))}
-                aria-describedby={
-                  fieldError('note')
-                    ? 'transfer-note-error'
-                    : undefined
-                }
-              />
-
-              {fieldError('note') && (
-                <p
-                  id="transfer-note-error"
-                  className="field-error"
-                  role="alert"
-                >
-                  {fieldError('note')}
-                </p>
-              )}
-            </div>
-
-            <div className="page-actions" style={{ flexWrap: 'wrap' }}>
-              <Link
-                to="/inventory_overview"
-                className="btn btn-secondary"
-              >
-                Cancel
-              </Link>
-
-              <button className="btn btn-primary" type="submit">
-                Review transfer
-              </button>
-            </div>
-          </form>
-
-          <Card title="Stock preview">
-            <div className="transfer-box">
-              <p className="transfer-box-label">
-                {fromLocation?.name ?? 'Source location'}
-              </p>
-              <p className="transfer-box-value">
-                {productId && fromId ? fromBefore : '—'} → {fromAfter}
-              </p>
-            </div>
-
-            <p className="transfer-arrow">↓</p>
-
-            <div className="transfer-box">
-              <p className="transfer-box-label">
-                {toLocation?.name ?? 'Destination location'}
-              </p>
-              <p className="transfer-box-value">
-                {productId && toId ? toBefore : '—'} → {toAfter}
-              </p>
-            </div>
-
-            {tooMuch && (
-              <p className="field-error" role="alert">
-                Only {fromBefore} available at the source.
-              </p>
-            )}
-          </Card>
-        </div>
-      )}
-
-      {step === 'review' && (
-        <div className="transfer-review-layout transfer-stock-page">
-          <section className="card" aria-label="Review transfer">
-            <div className="card-body">
-              <h2 className="form-section-title">
-                Review before confirming
-              </h2>
-
-              <p>
-                <strong>Product:</strong> {selectedProduct?.name} (
-                {selectedProduct?.sku})
-              </p>
-
-              <p>
-                <strong>Quantity:</strong>{' '}
-                <span className="mono">{quantity}</span>
-              </p>
-
-              <p>
-                <strong>From:</strong> {fromLocation?.name}
-              </p>
-
-              <p>
-                <strong>To:</strong> {toLocation?.name}
-              </p>
-
-              {note.trim() && (
                 <p>
-                  <strong>Note:</strong> {note.trim()}
+                  <strong>From:</strong> {selectedTransfer.from_location_name}
                 </p>
-              )}
+                <p>
+                  <strong>To:</strong> {selectedTransfer.to_location_name}
+                </p>
 
+                {selectedTransfer.note && (
+                  <p>
+                    <strong>Dispatch note:</strong> {selectedTransfer.note}
+                  </p>
+                )}
+
+                <div className="table-responsive">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Product</th>
+                        <th>Sent</th>
+                        <th>Received</th>
+                        <th>Shortage reason</th>
+                        <th>Shortage note</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedTransfer.lines.map((line) => {
+                        const id = line.transfer_line_id;
+                        const received =
+                          receivedQuantities[id] ?? line.quantity_sent;
+                        const isShort =
+                          validNonNegativeDecimal(received) &&
+                          compareDecimal(received, line.quantity_sent) < 0;
+
+                        return (
+                          <tr key={id}>
+                            <td>
+                              <strong>{line.product_name}</strong>
+                              <div className="field-hint">
+                                {line.product_sku} · {line.unit_of_measure}
+                              </div>
+                            </td>
+                            <td className="mono">{line.quantity_sent}</td>
+                            <td>
+                              <input
+                                className="field-input"
+                                type="text"
+                                inputMode="decimal"
+                                value={received}
+                                disabled={receiving}
+                                onChange={(event) =>
+                                  setReceivedQuantities((current) => ({
+                                    ...current,
+                                    [id]: event.target.value,
+                                  }))
+                                }
+                                aria-label={`Quantity received for ${line.product_name}`}
+                              />
+                            </td>
+                            <td>
+                              {isShort ? (
+                                <select
+                                  className="field-select"
+                                  value={shortageReasons[id] ?? ''}
+                                  disabled={receiving}
+                                  onChange={(event) =>
+                                    setShortageReasons((current) => ({
+                                      ...current,
+                                      [id]: event.target.value,
+                                    }))
+                                  }
+                                  aria-label={`Shortage reason for ${line.product_name}`}
+                                >
+                                  <option value="">Select reason</option>
+                                  {writeOffReasons.map((reason) => (
+                                    <option
+                                      key={reason.reason_code_id}
+                                      value={reason.reason_code_id}
+                                    >
+                                      {reason.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <span className="field-hint">Not required</span>
+                              )}
+                            </td>
+                            <td>
+                              {isShort ? (
+                                <input
+                                  className="field-input"
+                                  type="text"
+                                  maxLength={2000}
+                                  value={shortageNotes[id] ?? ''}
+                                  disabled={receiving}
+                                  onChange={(event) =>
+                                    setShortageNotes((current) => ({
+                                      ...current,
+                                      [id]: event.target.value,
+                                    }))
+                                  }
+                                  aria-label={`Shortage note for ${line.product_name}`}
+                                />
+                              ) : (
+                                <span className="field-hint">Not required</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <p className="field-hint">
+                  Enter the actual quantity received for each product. A
+                  quantity below the sent amount requires a write-off reason
+                  and note. You cannot receive more than was dispatched.
+                </p>
+
+                <div className="page-actions" style={{ flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={receiving}
+                    onClick={() => setSelectedTransfer(null)}
+                  >
+                    Close
+                  </button>
+
+                  {isManager && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      disabled={receiving}
+                      onClick={() =>
+                        void cancelTransfer(selectedTransfer.transfer_id)
+                      }
+                    >
+                      Cancel transfer
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={receiving}
+                    onClick={() => void confirmReceipt()}
+                  >
+                    {receiving ? 'Processing…' : 'Confirm receipt'}
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {isManager && (
+            <>
               <div
-                className="transfer-box"
-                style={{ marginTop: 'var(--space-4)' }}
+                aria-label="Transfer progress"
+                className="field-hint"
+                style={{ marginBottom: 'var(--space-4)' }}
               >
-                <p className="transfer-box-label">
-                  Source — {fromLocation?.name}
-                </p>
-                <p className="transfer-box-value">
-                  {fromBefore} → {fromAfter}
-                </p>
+                {step === 'form'
+                  ? 'Step 1 — Dispatch stock'
+                  : step === 'review'
+                    ? 'Review dispatch'
+                    : 'Dispatch complete'}
               </div>
 
-              <div className="transfer-box">
-                <p className="transfer-box-label">
-                  Destination — {toLocation?.name}
-                </p>
-                <p className="transfer-box-value">
-                  {toBefore} → {toAfter}
-                </p>
-              </div>
-
-              {tooMuch && (
+              {blockingError && step !== 'done' && (
                 <p role="alert" className="field-error">
-                  Stock has changed. Only {fromBefore} is currently
-                  available. Go back and revise the quantity.
+                  {blockingError}
                 </p>
               )}
 
-              <p
-                className="field-hint"
-                style={{ marginBottom: 'var(--space-3)' }}
-              >
-                These quantities are a preview; the backend checks
-                available stock again at confirmation.
-              </p>
+              {step === 'form' && !blockingError && (
+                <div className="form-with-sidebar transfer-stock-page">
+                  <form
+                    className="stock-movement-form"
+                    onSubmit={(event) => void review(event)}
+                    noValidate
+                  >
+                    <div className="field">
+                      <label className="field-label" htmlFor="transfer-product">
+                        Product *
+                      </label>
+                      <select
+                        id="transfer-product"
+                        className="field-select"
+                        value={productId}
+                        onChange={(event) => {
+                          setProductId(event.target.value);
+                          setErrors({});
+                        }}
+                        aria-invalid={Boolean(fieldError('product'))}
+                        required
+                      >
+                        <option value="">Select a product</option>
+                        {products.map((product) => (
+                          <option
+                            key={product.product_id}
+                            value={product.product_id}
+                          >
+                            {product.name} ({product.sku})
+                          </option>
+                        ))}
+                      </select>
+                      {fieldError('product') && (
+                        <p className="field-error" role="alert">
+                          {fieldError('product')}
+                        </p>
+                      )}
+                    </div>
 
-              <div className="page-actions" style={{ flexWrap: 'wrap' }}>
-                <button
-                  className="btn btn-secondary"
-                  type="button"
-                  disabled={saving || loading}
-                  onClick={() => {
-                    setStep('form');
-                    setError('');
-                  }}
-                >
-                  Back
-                </button>
+                    <div className="field-row">
+                      <div className="field">
+                        <label className="field-label" htmlFor="transfer-from">
+                          From location *
+                        </label>
+                        <select
+                          id="transfer-from"
+                          className="field-select"
+                          value={fromId}
+                          onChange={(event) => {
+                            setFromId(event.target.value);
+                            setErrors({});
+                          }}
+                          aria-invalid={Boolean(fieldError('from'))}
+                          required
+                        >
+                          <option value="">Select source</option>
+                          {locations.map((location) => (
+                            <option
+                              key={location.location_id}
+                              value={location.location_id}
+                            >
+                              {location.name}
+                            </option>
+                          ))}
+                        </select>
+                        {fieldError('from') && (
+                          <p className="field-error" role="alert">
+                            {fieldError('from')}
+                          </p>
+                        )}
+                      </div>
 
-                <button
-                  className="btn btn-primary"
-                  type="button"
-                  disabled={saving || loading || tooMuch}
-                  onClick={() => void confirm()}
-                >
-                  {saving ? 'Transferring…' : 'Confirm transfer'}
-                </button>
-              </div>
-            </div>
-          </section>
-        </div>
-      )}
+                      <div className="field">
+                        <label className="field-label" htmlFor="transfer-to">
+                          To location *
+                        </label>
+                        <select
+                          id="transfer-to"
+                          className="field-select"
+                          value={toId}
+                          onChange={(event) => {
+                            setToId(event.target.value);
+                            setErrors({});
+                          }}
+                          aria-invalid={Boolean(fieldError('to'))}
+                          required
+                        >
+                          <option value="">Select destination</option>
+                          {locations.map((location) => (
+                            <option
+                              key={location.location_id}
+                              value={location.location_id}
+                            >
+                              {location.name}
+                            </option>
+                          ))}
+                        </select>
+                        {fieldError('to') && (
+                          <p className="field-error" role="alert">
+                            {fieldError('to')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
 
-      {step === 'done' && success && (
-        <section className="card" aria-label="Transfer confirmation">
-          <div className="card-body">
-            <h2 className="form-section-title">
-              Transfer successful
-            </h2>
+                    <p className="field-hint">
+                      Available at source:{' '}
+                      <span className="mono">
+                        {productId && fromId ? fromBefore : '—'}
+                      </span>
+                    </p>
 
-            <p role="status">
-              {success.quantity_transferred} units transferred from{' '}
-              {fromLocation?.name} to {toLocation?.name}.
-            </p>
+                    <div className="field">
+                      <label
+                        className="field-label"
+                        htmlFor="transfer-quantity"
+                      >
+                        Quantity *
+                      </label>
+                      <input
+                        id="transfer-quantity"
+                        className="field-input"
+                        type="text"
+                        inputMode="decimal"
+                        value={quantity}
+                        onChange={(event) => {
+                          setQuantity(event.target.value);
+                          setErrors({});
+                        }}
+                        aria-invalid={Boolean(fieldError('quantity'))}
+                        required
+                      />
+                      <p className="field-hint">
+                        Enter a positive quantity. Decimals are supported.
+                      </p>
+                      {fieldError('quantity') && (
+                        <p className="field-error" role="alert">
+                          {fieldError('quantity')}
+                        </p>
+                      )}
+                    </div>
 
-            <div
-              className="transfer-box"
-              style={{ marginTop: 'var(--space-4)' }}
-            >
-              <p className="transfer-box-label">
-                Source — {fromLocation?.name}
-              </p>
-              <p className="transfer-box-value">
-                {success.source.quantity_before} →{' '}
-                {success.source.quantity_after}
-              </p>
-            </div>
+                    <div className="field">
+                      <label className="field-label" htmlFor="transfer-note">
+                        Note (optional)
+                      </label>
+                      <textarea
+                        id="transfer-note"
+                        className="field-textarea"
+                        maxLength={2000}
+                        value={note}
+                        onChange={(event) => {
+                          setNote(event.target.value);
+                          setErrors({});
+                        }}
+                      />
+                      {fieldError('note') && (
+                        <p className="field-error" role="alert">
+                          {fieldError('note')}
+                        </p>
+                      )}
+                    </div>
 
-            <div className="transfer-box">
-              <p className="transfer-box-label">
-                Destination — {toLocation?.name}
-              </p>
-              <p className="transfer-box-value">
-                {success.destination.quantity_before} →{' '}
-                {success.destination.quantity_after}
-              </p>
-            </div>
+                    <div className="page-actions" style={{ flexWrap: 'wrap' }}>
+                      <Link
+                        to="/inventory_overview"
+                        className="btn btn-secondary"
+                      >
+                        Cancel
+                      </Link>
+                      <button className="btn btn-primary" type="submit">
+                        Review dispatch
+                      </button>
+                    </div>
+                  </form>
 
-            <p className="field-hint">
-              Transfer reference:{' '}
-              <span className="mono">{success.reference_id}</span>
-            </p>
+                  <Card title="Dispatch preview">
+                    <div className="transfer-box">
+                      <p className="transfer-box-label">
+                        {fromLocation?.name ?? 'Source location'}
+                      </p>
+                      <p className="transfer-box-value">
+                        {productId && fromId ? fromBefore : '—'} → {fromAfter}
+                      </p>
+                    </div>
 
-            <div
-              className="page-actions"
-              style={{
-                flexWrap: 'wrap',
-                marginTop: 'var(--space-4)',
-              }}
-            >
-              <Link
-                to="/inventory_overview"
-                className="btn btn-primary"
-              >
-                View inventory
-              </Link>
+                    <p className="transfer-arrow">↓</p>
 
-              <button
-                className="btn btn-secondary"
-                type="button"
-                onClick={() => {
-                  setStep('form');
-                  setSuccess(null);
-                  setQuantity('');
-                  setNote('');
-                  void load(false);
-                }}
-              >
-                New transfer
-              </button>
-            </div>
-          </div>
-        </section>
+                    <div className="transfer-box">
+                      <p className="transfer-box-label">Stock in Transit</p>
+                      <p className="transfer-box-value">
+                        {amountValid ? quantity : '—'}
+                      </p>
+                    </div>
+
+                    <p className="field-hint">
+                      Destination stock only increases after the receiving
+                      location confirms the quantities received.
+                    </p>
+
+                    {tooMuch && (
+                      <p className="field-error" role="alert">
+                        Only {fromBefore} available at the source.
+                      </p>
+                    )}
+                  </Card>
+                </div>
+              )}
+
+              {step === 'review' && (
+                <div className="transfer-review-layout transfer-stock-page">
+                  <section className="card" aria-label="Review dispatch">
+                    <div className="card-body">
+                      <h2 className="form-section-title">
+                        Review before dispatch
+                      </h2>
+
+                      <p>
+                        <strong>Product:</strong> {selectedProduct?.name} (
+                        {selectedProduct?.sku})
+                      </p>
+                      <p>
+                        <strong>Quantity:</strong>{' '}
+                        <span className="mono">{quantity}</span>
+                      </p>
+                      <p>
+                        <strong>From:</strong> {fromLocation?.name}
+                      </p>
+                      <p>
+                        <strong>To:</strong> {toLocation?.name}
+                      </p>
+                      {note.trim() && (
+                        <p>
+                          <strong>Note:</strong> {note.trim()}
+                        </p>
+                      )}
+
+                      <div
+                        className="transfer-box"
+                        style={{ marginTop: 'var(--space-4)' }}
+                      >
+                        <p className="transfer-box-label">
+                          Source — {fromLocation?.name}
+                        </p>
+                        <p className="transfer-box-value">
+                          {fromBefore} → {fromAfter}
+                        </p>
+                      </div>
+
+                      <div className="transfer-box">
+                        <p className="transfer-box-label">Stock in Transit</p>
+                        <p className="transfer-box-value">+{quantity}</p>
+                      </div>
+
+                      <p className="field-hint">
+                        Dispatch deducts stock from the source and places it
+                        in Stock in Transit. The destination is credited only
+                        after receipt is confirmed.
+                      </p>
+
+                      {tooMuch && (
+                        <p role="alert" className="field-error">
+                          Stock has changed. Only {fromBefore} is currently
+                          available. Go back and revise the quantity.
+                        </p>
+                      )}
+
+                      <div className="page-actions" style={{ flexWrap: 'wrap' }}>
+                        <button
+                          className="btn btn-secondary"
+                          type="button"
+                          disabled={saving || loading}
+                          onClick={() => {
+                            setStep('form');
+                            setError('');
+                          }}
+                        >
+                          Back
+                        </button>
+                        <button
+                          className="btn btn-primary"
+                          type="button"
+                          disabled={saving || loading || tooMuch}
+                          onClick={() => void confirmDispatch()}
+                        >
+                          {saving ? 'Dispatching…' : 'Confirm dispatch'}
+                        </button>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+              )}
+
+              {step === 'done' && success && (
+                <section className="card" aria-label="Dispatch confirmation">
+                  <div className="card-body">
+                    <h2 className="form-section-title">
+                      Stock dispatched successfully
+                    </h2>
+
+                    <p role="status">
+                      Transfer <strong>{success.transfer_no}</strong> is now{' '}
+                      <strong>IN_TRANSIT</strong>.
+                    </p>
+
+                    <p>
+                      <strong>Quantity dispatched:</strong>{' '}
+                      <span className="mono">{success.quantity_sent}</span>
+                    </p>
+                    <p>
+                      <strong>Destination:</strong> {toLocation?.name}
+                    </p>
+
+                    <p className="field-hint">
+                      Transfer reference:{' '}
+                      <span className="mono">{success.transfer_no}</span>
+                    </p>
+                    <p className="field-hint">
+                      The destination must confirm receipt before its
+                      inventory is increased.
+                    </p>
+
+                    <div
+                      className="page-actions"
+                      style={{
+                        flexWrap: 'wrap',
+                        marginTop: 'var(--space-4)',
+                      }}
+                    >
+                      <Link
+                        to="/inventory_overview"
+                        className="btn btn-primary"
+                      >
+                        View inventory
+                      </Link>
+                      <button
+                        className="btn btn-secondary"
+                        type="button"
+                        onClick={() => {
+                          setStep('form');
+                          setSuccess(null);
+                          setQuantity('');
+                          setNote('');
+                          void load(false);
+                        }}
+                      >
+                        New dispatch
+                      </button>
+                    </div>
+                  </div>
+                </section>
+              )}
+            </>
+          )}
+        </>
       )}
     </AppLayout>
   );

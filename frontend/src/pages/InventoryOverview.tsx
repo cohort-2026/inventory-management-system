@@ -84,11 +84,11 @@ export default function InventoryOverview() {
     return () => window.clearTimeout(timer);
   }, [searchText]);
 
-  // Managers can choose a location.
-  // Inventory Staff remain restricted by the backend to their home location.
+  // Only Managers can load and select warehouses.
   useEffect(() => {
     if (!isManager) {
       setLocations([]);
+      setLocation('');
       return;
     }
 
@@ -130,7 +130,7 @@ export default function InventoryOverview() {
 
       const filters: InventoryFilters = {
         search,
-        location,
+        location: isManager ? location : '',
         status,
         page,
         pageSize: PAGE_SIZE,
@@ -138,7 +138,7 @@ export default function InventoryOverview() {
 
       const summaryFilters: InventoryFilters = {
         search,
-        location,
+        location: isManager ? location : '',
       };
 
       try {
@@ -180,7 +180,7 @@ export default function InventoryOverview() {
     return () => {
       active = false;
     };
-  }, [page, search, location, status, refresh]);
+  }, [page, search, location, status, refresh, isManager]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -201,7 +201,7 @@ export default function InventoryOverview() {
     try {
       await exportInventoryCsv({
         search,
-        location,
+        location: isManager ? location : '',
         status,
       });
     } catch (caught) {
@@ -258,6 +258,45 @@ export default function InventoryOverview() {
             </>
           }
         />
+
+        {/* Manager-only warehouse quick-selection tabs */}
+        {isManager && (
+          <section
+            className="f04-location-tabs"
+            aria-label="Warehouse selection"
+          >
+            <button
+              type="button"
+              className={
+                location === ''
+                  ? 'btn btn-primary'
+                  : 'btn btn-secondary'
+              }
+              aria-pressed={location === ''}
+              onClick={() => handleLocationChange('')}
+            >
+              All Warehouses
+            </button>
+
+            {locations.map((item) => (
+              <button
+                key={item.location_id}
+                type="button"
+                className={
+                  location === item.location_id
+                    ? 'btn btn-primary'
+                    : 'btn btn-secondary'
+                }
+                aria-pressed={location === item.location_id}
+                onClick={() =>
+                  handleLocationChange(item.location_id)
+                }
+              >
+                {item.name}
+              </button>
+            ))}
+          </section>
+        )}
 
         {/* Inventory summary */}
         <div className="f04-summary">
@@ -336,6 +375,7 @@ export default function InventoryOverview() {
             />
           </label>
 
+          {/* Manager-only warehouse dropdown */}
           {isManager && (
             <label
               className="field"
@@ -347,7 +387,7 @@ export default function InventoryOverview() {
               }}
             >
               <span className="field-label">
-                Location
+                Warehouse
               </span>
 
               <select
@@ -358,7 +398,7 @@ export default function InventoryOverview() {
                   handleLocationChange(event.target.value)
                 }
               >
-                <option value="">All locations</option>
+                <option value="">All warehouses</option>
 
                 {locations.map((item) => (
                   <option
@@ -373,7 +413,7 @@ export default function InventoryOverview() {
           )}
         </div>
 
-        {locationError && (
+        {locationError && isManager && (
           <div role="alert" style={{ marginBottom: 'var(--space-4)' }}>
             {locationError}
           </div>
