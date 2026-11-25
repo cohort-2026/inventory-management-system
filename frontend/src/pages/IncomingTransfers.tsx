@@ -173,7 +173,7 @@ export default function IncomingTransfers() {
   }
 
   async function submitReceipt() {
-    if (!selectedTransfer) return;
+    if (!selectedTransfer || submitting) return;
 
     setError('');
     setSuccess('');
@@ -202,7 +202,9 @@ export default function IncomingTransfers() {
       }
 
       if (hasShortage && !input.shortage_note.trim()) {
-        setError(`Enter a note explaining the shortage for ${line.product_name}.`);
+        setError(
+          `Enter a note explaining the shortage for ${line.product_name}.`,
+        );
         return;
       }
     }
@@ -217,7 +219,7 @@ export default function IncomingTransfers() {
             compareDecimal(input.quantity_received, line.quantity_sent) < 0;
 
           return {
-            transfer_line_id: line.transfer_line_id,
+            product_id: line.product_id,
             quantity_received: normalizeDecimal(input.quantity_received),
             shortage_reason_code_id: hasShortage
               ? input.shortage_reason_code_id
@@ -316,7 +318,7 @@ export default function IncomingTransfers() {
                       </td>
                       <td className="p-3">{transfer.from_location_name}</td>
                       <td className="p-3">{transfer.to_location_name}</td>
-                      <td className="p-3">{transfer.lines?.length ?? 0}</td>
+                      <td className="p-3">{transfer.line_count}</td>
                       <td className="p-3">
                         {transfer.dispatched_at
                           ? new Date(transfer.dispatched_at).toLocaleString()

@@ -207,26 +207,26 @@ export default function TransferStock() {
 
       try {
         if (reloadOptions) {
-          const [opts, records, pending] = await Promise.all([
-            fetchTransferOptions(),
-            fetchAllTransferInventory(),
-            fetchPendingTransfers(),
-          ]);
+          // Save products and locations before loading pending transfers.
+          // A pending-transfer failure will no longer erase product options.
+          const opts = await fetchTransferOptions();
 
           setProducts(opts.products);
           setLocations(opts.locations);
-          setInventory(records);
-          setPendingTransfers(pending);
 
           setProductId((current) => {
             if (
               requestedProductId &&
-              opts.products.some((item) => item.product_id === requestedProductId)
+              opts.products.some(
+                (item) => item.product_id === requestedProductId,
+              )
             ) {
               return requestedProductId;
             }
 
-            return opts.products.some((item) => item.product_id === current)
+            return opts.products.some(
+              (item) => item.product_id === current,
+            )
               ? current
               : opts.products[0]?.product_id ?? '';
           });
@@ -234,12 +234,16 @@ export default function TransferStock() {
           setFromId((current) => {
             if (
               requestedFromId &&
-              opts.locations.some((item) => item.location_id === requestedFromId)
+              opts.locations.some(
+                (item) => item.location_id === requestedFromId,
+              )
             ) {
               return requestedFromId;
             }
 
-            return opts.locations.some((item) => item.location_id === current)
+            return opts.locations.some(
+              (item) => item.location_id === current,
+            )
               ? current
               : opts.locations[0]?.location_id ?? '';
           });
@@ -247,12 +251,16 @@ export default function TransferStock() {
           setToId((current) => {
             if (
               requestedToId &&
-              opts.locations.some((item) => item.location_id === requestedToId)
+              opts.locations.some(
+                (item) => item.location_id === requestedToId,
+              )
             ) {
               return requestedToId;
             }
 
-            return opts.locations.some((item) => item.location_id === current)
+            return opts.locations.some(
+              (item) => item.location_id === current,
+            )
               ? current
               : opts.locations[1]?.location_id ??
                   opts.locations[0]?.location_id ??
@@ -262,15 +270,15 @@ export default function TransferStock() {
           if (validPositiveDecimal(requestedQuantity)) {
             setQuantity(requestedQuantity);
           }
-        } else {
-          const [records, pending] = await Promise.all([
-            fetchAllTransferInventory(),
-            fetchPendingTransfers(),
-          ]);
-
-          setInventory(records);
-          setPendingTransfers(pending);
         }
+
+        const [records, pending] = await Promise.all([
+          fetchAllTransferInventory(),
+          fetchPendingTransfers(),
+        ]);
+
+        setInventory(records);
+        setPendingTransfers(pending);
 
         return true;
       } catch (caught) {
@@ -468,7 +476,12 @@ export default function TransferStock() {
     if (!selectedTransfer || receiving) return;
 
     const lines = selectedTransfer.lines;
-    const bodyLines = [];
+    const bodyLines: Array<{
+      product_id: string;
+      quantity_received: string;
+      shortage_reason_code_id: string | null;
+      shortage_note: string | null;
+    }> = [];
 
     for (const line of lines) {
       const id = line.transfer_line_id;
@@ -498,13 +511,13 @@ export default function TransferStock() {
         return;
       }
 
-      if (isShort && reason?.requires_note && !shortageNote) {
+      if (isShort && !shortageNote) {
         setError(`Enter a note for the shortage of ${line.product_name}.`);
         return;
       }
 
       bodyLines.push({
-        transfer_line_id: id,
+        product_id: line.product_id,
         quantity_received: received,
         shortage_reason_code_id: isShort ? reasonId : null,
         shortage_note: isShort ? shortageNote : null,
@@ -619,7 +632,7 @@ export default function TransferStock() {
                             </td>
                             <td>{transfer.from_location_name}</td>
                             <td>{transfer.to_location_name}</td>
-                            <td>{transfer.lines.length}</td>
+                            <td>{transfer.line_count}</td>
                             <td>{transfer.status}</td>
                             <td>
                               <button
@@ -681,7 +694,8 @@ export default function TransferStock() {
                     <tbody>
                       {selectedTransfer.lines.map((line) => {
                         const id = line.transfer_line_id;
-                        const received = receivedQuantities[id] ?? line.quantity_sent;
+                        const received =
+                          receivedQuantities[id] ?? line.quantity_sent;
                         const isShort =
                           validNonNegativeDecimal(received) &&
                           compareDecimal(received, line.quantity_sent) < 0;
@@ -1140,27 +1154,6 @@ export default function TransferStock() {
                     <p>
                       <strong>Destination:</strong> {toLocation?.name}
                     </p>
-
-                    <div
-                      className="transfer-box"
-                      style={{ marginTop: 'var(--space-4)' }}
-                    >
-                      <p className="transfer-box-label">
-                        Source — {fromLocation?.name}
-                      </p>
-                      <p className="transfer-box-value">
-                        {success.source.quantity_before} →{' '}
-                        {success.source.quantity_after}
-                      </p>
-                    </div>
-
-                    <div className="transfer-box">
-                      <p className="transfer-box-label">Stock in Transit</p>
-                      <p className="transfer-box-value">
-                        {success.transit.quantity_before} →{' '}
-                        {success.transit.quantity_after}
-                      </p>
-                    </div>
 
                     <p className="field-hint">
                       Transfer reference:{' '}

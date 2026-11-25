@@ -1,5 +1,10 @@
+
 import { Router } from 'express';
-import { getInventory, getInventorySummary, exportInventoryCsv } from '../controllers/inventoryController';
+import {
+  getInventory,
+  getInventorySummary,
+  exportInventoryCsv,
+} from '../controllers/inventoryController';
 import { createInventoryAdjustment } from '../controllers/inventoryAdjustmentController';
 import { requireSession } from '../middleware/requireSession';
 import { customRequireRole } from '../middleware/customRequireRole';
@@ -9,6 +14,7 @@ import {
   dispatchF09Transfer,
   receiveF09Transfer,
   cancelF09Transfer,
+  rejectF09Transfer,
   getPendingF09Transfers,
   getF09TransferDetails,
 } from '../controllers/f09TransferController';
@@ -76,6 +82,20 @@ router.post(
   cancelF09Transfer,
 );
 
+// Reject an in-transit transfer and return stock to its source
+router.post(
+  '/transfers/:transferId/reject',
+  requireSession,
+  customRequireRole('Manager', 'Inventory Staff'),
+  rejectF09Transfer,
+);
+
 // Preserve F01 stock-level, adjustment, and transfer contracts.
-router.post('/adjustments', requireSession, customRequireRole('Manager', 'Inventory Staff'), createInventoryAdjustment);
+router.post(
+  '/adjustments',
+  requireSession,
+  customRequireRole('Manager', 'Inventory Staff'),
+  createInventoryAdjustment,
+);
+
 export default router;

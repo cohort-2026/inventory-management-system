@@ -10,12 +10,6 @@ function object(value: unknown): value is JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function asString(value: unknown): string {
-  return typeof value === 'string' || typeof value === 'number'
-    ? String(value)
-    : '';
-}
-
 export type TransferInventoryRow = {
   inventory_id: string | null;
   product_id: string;
@@ -23,24 +17,11 @@ export type TransferInventoryRow = {
   quantity: string;
 };
 
-export type TransferStockChange = {
-  location_id: string;
-  inventory_id: string;
-  quantity_before: string;
-  quantity_after: string;
-};
-
 export type TransferResult = {
   transfer_id: string;
   transfer_no: string;
   status: 'IN_TRANSIT';
-  product_id: string;
   quantity_sent: string;
-  from_location_id: string;
-  to_location_id: string;
-  transit_location_id: string;
-  source: TransferStockChange;
-  transit: TransferStockChange;
 };
 
 export type TransferLine = {
@@ -66,7 +47,7 @@ export type PendingTransfer = {
   from_location_name: string;
   to_location_id: string;
   to_location_name: string;
-  lines: TransferLine[];
+  line_count: number;
 };
 
 export type TransferDetails = PendingTransfer & {
@@ -74,22 +55,17 @@ export type TransferDetails = PendingTransfer & {
   received_by?: string | null;
   cancelled_at?: string | null;
   cancelled_by?: string | null;
+  rejected_by?: string | null;
+  rejected_at?: string | null;
+  rejection_reason?: string | null;
+  rejection_note?: string | null;
+  lines: TransferLine[];
 };
 
 export type ReceiveTransferResult = {
   transfer_id: string;
   transfer_no: string;
   status: 'RECEIVED';
-  received_by?: string;
-  lines: Array<{
-    transfer_line_id: string;
-    product_id: string;
-    quantity_sent: string;
-    quantity_received: string;
-    shortage_quantity: string;
-    transit_quantity_after: string;
-    destination_quantity_after: string;
-  }>;
 };
 
 export type CancelTransferResult = {
@@ -152,8 +128,7 @@ export async function fetchTransferOptions(): Promise<{
   return { products, locations };
 }
 
-// GET /api/inventory is paginated. Load every page so unlisted
-// product-location combinations are not silently mistaken for zero stock.
+// GET /api/inventory is paginated. Load every page.
 export async function fetchAllTransferInventory(): Promise<TransferInventoryRow[]> {
   const all: TransferInventoryRow[] = [];
   const pageSize = 100;
@@ -179,7 +154,8 @@ export async function fetchAllTransferInventory(): Promise<TransferInventoryRow[
     for (const row of payload.items as unknown[]) {
       if (
         !object(row) ||
-        (row.inventory_id !== null && typeof row.inventory_id !== 'string') ||
+        (row.inventory_id !== null &&
+          typeof row.inventory_id !== 'string') ||
         typeof row.product_id !== 'string' ||
         typeof row.location_id !== 'string' ||
         (typeof row.quantity !== 'string' &&
@@ -226,7 +202,6 @@ export async function fetchAllTransferInventory(): Promise<TransferInventoryRow[
   }
 }
 
-// F09: Dispatch stock from the source location into Stock in Transit.
 // POST /api/inventory/transfers/dispatch
 export async function submitStockTransfer(input: {
   product_id: string;
@@ -238,48 +213,27 @@ export async function submitStockTransfer(input: {
   const payload = await fetchJson('/inventory/transfers/dispatch', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
+    body: JSON.stringify({
+      from_location_id: input.from_location_id,
+      to_location_id: input.to_location_id,
+      note: input.note,
+      lines: [
+        {
+          product_id: input.product_id,
+          quantity: input.quantity,
+        },
+      ],
+    }),
   });
 
   if (
     !object(payload) ||
     typeof payload.transfer_id !== 'string' ||
     typeof payload.transfer_no !== 'string' ||
-    payload.status !== 'IN_TRANSIT' ||
-    typeof payload.product_id !== 'string' ||
-    typeof payload.from_location_id !== 'string' ||
-    typeof payload.to_location_id !== 'string' ||
-    typeof payload.transit_location_id !== 'string' ||
-    !object(payload.source) ||
-    !object(payload.transit)
+    payload.status !== 'IN_TRANSIT'
   ) {
     throw new Error(
       'Dispatch may have completed, but the server returned an unexpected response. Refresh transfers before retrying.',
-    );
-  }
-
-  const source = payload.source;
-  const transit = payload.transit;
-
-  for (const row of [source, transit]) {
-    if (
-      typeof row.location_id !== 'string' ||
-      typeof row.inventory_id !== 'string' ||
-      row.quantity_before === undefined ||
-      row.quantity_after === undefined
-    ) {
-      throw new Error(
-        'Dispatch may have completed, but the server returned unexpected stock quantities. Refresh inventory before retrying.',
-      );
-    }
-  }
-
-  if (
-    source.location_id !== payload.from_location_id ||
-    transit.location_id !== payload.transit_location_id
-  ) {
-    throw new Error(
-      'The server returned inconsistent transfer location details.',
     );
   }
 
@@ -287,27 +241,10 @@ export async function submitStockTransfer(input: {
     transfer_id: payload.transfer_id,
     transfer_no: payload.transfer_no,
     status: 'IN_TRANSIT',
-    product_id: payload.product_id,
-    quantity_sent: asString(payload.quantity_sent),
-    from_location_id: payload.from_location_id,
-    to_location_id: payload.to_location_id,
-    transit_location_id: payload.transit_location_id,
-    source: {
-      location_id: source.location_id as string,
-      inventory_id: source.inventory_id as string,
-      quantity_before: asString(source.quantity_before),
-      quantity_after: asString(source.quantity_after),
-    },
-    transit: {
-      location_id: transit.location_id as string,
-      inventory_id: transit.inventory_id as string,
-      quantity_before: asString(transit.quantity_before),
-      quantity_after: asString(transit.quantity_after),
-    },
+    quantity_sent: input.quantity,
   };
 }
 
-// F09: List transfers waiting to be received.
 // GET /api/inventory/transfers/pending
 export async function fetchPendingTransfers(): Promise<PendingTransfer[]> {
   const payload = await fetchJson('/inventory/transfers/pending');
@@ -319,7 +256,6 @@ export async function fetchPendingTransfers(): Promise<PendingTransfer[]> {
   return payload.transfers as PendingTransfer[];
 }
 
-// F09: Get one transfer and its line details.
 // GET /api/inventory/transfers/:transferId
 export async function fetchTransferDetails(
   transferId: string,
@@ -335,13 +271,12 @@ export async function fetchTransferDetails(
   return payload.transfer as unknown as TransferDetails;
 }
 
-// F09: Record the quantities actually received.
 // POST /api/inventory/transfers/:transferId/receive
 export async function receiveStockTransfer(
   transferId: string,
   input: {
     lines: Array<{
-      transfer_line_id: string;
+      product_id: string;
       quantity_received: string;
       shortage_reason_code_id?: string | null;
       shortage_note?: string | null;
@@ -361,18 +296,20 @@ export async function receiveStockTransfer(
     !object(payload) ||
     typeof payload.transfer_id !== 'string' ||
     typeof payload.transfer_no !== 'string' ||
-    payload.status !== 'RECEIVED' ||
-    !Array.isArray(payload.lines)
+    payload.status !== 'RECEIVED'
   ) {
     throw new Error(
       'Receipt may have completed, but the server returned an unexpected response. Refresh the transfer before retrying.',
     );
   }
 
-  return payload as unknown as ReceiveTransferResult;
+  return {
+    transfer_id: payload.transfer_id,
+    transfer_no: payload.transfer_no,
+    status: 'RECEIVED',
+  };
 }
 
-// F09: Cancel an in-transit transfer and return stock to its source.
 // POST /api/inventory/transfers/:transferId/cancel
 export async function cancelStockTransfer(
   transferId: string,
@@ -395,5 +332,9 @@ export async function cancelStockTransfer(
     );
   }
 
-  return payload as unknown as CancelTransferResult;
+  return {
+    transfer_id: payload.transfer_id,
+    transfer_no: payload.transfer_no,
+    status: 'CANCELLED',
+  };
 }

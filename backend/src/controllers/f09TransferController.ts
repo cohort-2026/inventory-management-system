@@ -58,9 +58,7 @@ function apiError(
 }
 
 function sendKnownError(res: Response, error: unknown): boolean {
-  if (
-    error instanceof StockRuleError
-  ) {
+  if (error instanceof StockRuleError) {
     res.status(400).json({ error: error.message });
     return true;
   }
@@ -87,10 +85,11 @@ function sendKnownError(res: Response, error: unknown): boolean {
     ) {
       res.status(statusCode).json({
         error:
-        error instanceof Error
-        ? error.message
-        : 'The request could not be completed.',
+          error instanceof Error
+            ? error.message
+            : 'The request could not be completed.',
       });
+      return true;
     }
   }
 
@@ -179,10 +178,7 @@ function parseDispatchInput(body: unknown): DispatchInput {
 
     const line = value as Record<string, unknown>;
 
-    const allowedLineFields = new Set([
-      'product_id',
-      'quantity',
-    ]);
+    const allowedLineFields = new Set(['product_id', 'quantity']);
 
     const unknownLineFields = Object.keys(line).filter(
       (field) => !allowedLineFields.has(field),
@@ -213,7 +209,10 @@ function parseDispatchInput(body: unknown): DispatchInput {
     try {
       quantity = parsePositiveStockQuantity(line.quantity);
     } catch {
-      throw apiError(400, 'Each transfer line needs a valid positive quantity.');
+      throw apiError(
+        400,
+        'Each transfer line needs a valid positive quantity.',
+      );
     }
 
     return {
@@ -243,7 +242,6 @@ function parseReceiveLines(body: unknown): ReceiveInput {
   }
 
   const data = body as Record<string, unknown>;
-
   const allowedFields = new Set(['lines']);
 
   const unknownFields = Object.keys(data).filter(
@@ -326,10 +324,8 @@ function parseReceiveLines(body: unknown): ReceiveInput {
     if (
       reasonCodeId !== undefined &&
       reasonCodeId !== null &&
-      (
-        typeof reasonCodeId !== 'string' ||
-        !UUID_REGEX.test(reasonCodeId)
-      )
+      (typeof reasonCodeId !== 'string' ||
+        !UUID_REGEX.test(reasonCodeId))
     ) {
       throw apiError(400, 'Invalid shortage reason code.');
     }
@@ -430,7 +426,7 @@ async function getTransitLocation(
       SELECT location_id
       FROM public.locations
       WHERE code = 'SYS-TRANSIT'
-        AND status = 'ACTIVE'
+        AND UPPER(status) = 'ACTIVE'
       LIMIT 1
     `,
   );
@@ -624,7 +620,9 @@ export async function getPendingF09Transfers(
       locationFilter = 'AND t.to_location_id = $1';
     }
 
-    const result = await (await import('../db/pool')).dbPool.query(
+    const { dbPool } = await import('../db/pool');
+
+    const result = await dbPool.query(
       `
         SELECT
           t.transfer_id,
@@ -656,7 +654,9 @@ export async function getPendingF09Transfers(
       values,
     );
 
-    res.status(200).json(result.rows);
+    res.status(200).json({
+      transfers: result.rows,
+    });
   } catch (error) {
     console.error('Unable to load pending transfers:', error);
     res.status(500).json({
@@ -718,9 +718,11 @@ export async function getF09TransferDetails(
           COALESCE(
             json_agg(
               json_build_object(
+                'transfer_line_id', tl.transfer_line_id,
                 'product_id', tl.product_id,
                 'product_name', p.name,
                 'product_sku', p.sku,
+                'unit_of_measure', p.unit_of_measure,
                 'quantity_sent', tl.quantity_sent,
                 'quantity_received', tl.quantity_received,
                 'shortage_reason_code_id', tl.shortage_reason_code_id,
@@ -768,7 +770,7 @@ export async function getF09TransferDetails(
       return;
     }
 
-    res.status(200).json(transfer);
+    res.status(200).json({ transfer });
   } catch (error) {
     console.error('Unable to load transfer details:', error);
     res.status(500).json({
@@ -814,17 +816,14 @@ export async function dispatchF09Transfer(
           SELECT location_id
           FROM public.locations
           WHERE location_id = ANY($1::uuid[])
-            AND status = 'ACTIVE'
+            AND UPPER(status) = 'ACTIVE'
           FOR UPDATE
         `,
         [[input.from_location_id, input.to_location_id]],
       );
 
       if (locationResult.rows.length !== 2) {
-        throw apiError(
-          400,
-          'Both transfer locations must be active.',
-        );
+        throw apiError(400, 'Both transfer locations must be active.');
       }
 
       const transitLocationId = await getTransitLocation(client);
@@ -1089,10 +1088,7 @@ export async function receiveF09Transfer(
 
         if (
           shortage > 0 &&
-          (
-            !line.shortage_reason_code_id ||
-            !line.shortage_note
-          )
+          (!line.shortage_reason_code_id || !line.shortage_note)
         ) {
           throw apiError(
             400,
