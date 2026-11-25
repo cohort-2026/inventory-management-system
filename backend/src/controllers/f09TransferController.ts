@@ -1,4 +1,3 @@
-
 import type { Response } from 'express';
 import type { PoolClient } from 'pg';
 import type { RoleAuthenticatedRequest } from '../middleware/customRequireRole';
@@ -509,22 +508,6 @@ async function addStockAtLocation(
   return row;
 }
 
-async function getProductUnit(
-  client: PoolClient,
-  productId: string,
-): Promise<string> {
-  const result = await client.query<{ unit_of_measure: string }>(
-    `
-      SELECT unit_of_measure
-      FROM public.products
-      WHERE product_id = $1
-    `,
-    [productId],
-  );
-
-  return result.rows[0]?.unit_of_measure ?? 'each';
-}
-
 async function insertTransferMovements(
   client: PoolClient,
   input: {
@@ -543,48 +526,44 @@ async function insertTransferMovements(
     notes: string | null;
   },
 ): Promise<void> {
-  const unitOfMeasure = await getProductUnit(client, input.productId);
-
   await client.query(
     `
       INSERT INTO public.stock_movements (
         product_id,
         location_id,
+        user_id,
         movement_type,
-        quantity,
+        quantity_change,
         quantity_before,
         quantity_after,
-        unit_of_measure,
-        reference_id,
         reference_no,
-        notes,
-        created_by
+        reference_id,
+        reason,
+        notes
       )
       VALUES
         (
-          $1, $2, 'TRANSFER_OUT', $3::numeric,
-          $4::numeric, $5::numeric, $6,
+          $1, $2, $3, 'TRANSFER_OUT',
+          -$4::numeric, $5::numeric, $6::numeric,
           $7, $8, $9, $10
         ),
         (
-          $1, $11, 'TRANSFER_IN', $3::numeric,
-          $12::numeric, $13::numeric, $6,
+          $1, $11, $3, 'TRANSFER_IN',
+          $4::numeric, $12::numeric, $13::numeric,
           $7, $8, $9, $10
         )
     `,
     [
       input.productId,
       input.outLocationId,
+      input.userId,
       input.quantity,
       input.outBefore,
       input.outAfter,
-      unitOfMeasure,
-      input.referenceId,
       input.referenceNo,
-      input.notes
-        ? `${input.reason}\n${input.notes}`
-        : input.reason,
-      input.userId,
+      input.referenceId,
+      input.reason,
+      input.notes,
       input.inLocationId,
       input.inBefore,
       input.inAfter,
@@ -1085,6 +1064,10 @@ export async function receiveF09Transfer(
         }
 
         const shortage = sent - received;
+        let shortageReason: {
+          reason_code_id: string;
+          label: string;
+        } | null = null;
 
         if (
           shortage > 0 &&
@@ -1097,9 +1080,12 @@ export async function receiveF09Transfer(
         }
 
         if (shortage > 0) {
-          const reasonResult = await client.query(
+          const reasonResult = await client.query<{
+            reason_code_id: string;
+            label: string;
+          }>(
             `
-              SELECT reason_code_id
+              SELECT reason_code_id, label
               FROM public.reason_codes
               WHERE reason_code_id = $1
                 AND movement_type = 'WRITE_OFF'
@@ -1114,6 +1100,8 @@ export async function receiveF09Transfer(
               'The selected shortage reason is not an active WRITE_OFF reason code.',
             );
           }
+
+          shortageReason = reasonResult.rows[0] ?? null;
         }
 
         await prepareInventoryRows(
@@ -1162,40 +1150,44 @@ export async function receiveF09Transfer(
             String(shortage),
           );
 
+          if (!shortageReason) {
+            throw new Error('The selected shortage reason could not be loaded.');
+          }
+
           await client.query(
             `
               INSERT INTO public.stock_movements (
                 product_id,
                 location_id,
+                user_id,
                 movement_type,
-                quantity,
+                quantity_change,
                 quantity_before,
                 quantity_after,
-                unit_of_measure,
                 reason_code_id,
-                reference_id,
                 reference_no,
-                notes,
-                created_by
+                reference_id,
+                reason,
+                notes
               )
               VALUES (
-                $1, $2, 'WRITE_OFF', $3::numeric,
-                $4::numeric, $5::numeric, $6,
+                $1, $2, $3, 'WRITE_OFF',
+                -$4::numeric, $5::numeric, $6::numeric,
                 $7, $8, $9, $10, $11
               )
             `,
             [
               line.product_id,
               transitLocationId,
+              user.id,
               shortage,
               transit.quantity_before,
               transit.quantity_after,
-              await getProductUnit(client, line.product_id),
-              line.shortage_reason_code_id,
-              transfer.transfer_id,
+              shortageReason.reason_code_id,
               transfer.transfer_no,
+              transfer.transfer_id,
+              shortageReason.label,
               line.shortage_note,
-              user.id,
             ],
           );
         }
