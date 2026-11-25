@@ -25,8 +25,9 @@ type ReceiptLineInput = {
   shortage_note: string;
 };
 
-function normalizeDecimal(value: string): string {
-  const [whole = '0', fraction = ''] = value.split('.');
+function normalizeDecimal(value: string | number): string {
+  const stringValue = String(value ?? '0');
+  const [whole = '0', fraction = ''] = stringValue.split('.');
   const normalizedWhole = whole.replace(/^0+(?=\d)/, '') || '0';
   const normalizedFraction = fraction.replace(/0+$/, '');
 
@@ -35,7 +36,10 @@ function normalizeDecimal(value: string): string {
     : normalizedWhole;
 }
 
-function compareDecimal(first: string, second: string): number {
+function compareDecimal(
+  first: string | number,
+  second: string | number,
+): number {
   const a = normalizeDecimal(first);
   const b = normalizeDecimal(second);
 
@@ -140,7 +144,7 @@ export default function IncomingTransfers() {
 
       for (const line of details.lines) {
         initialInputs[line.transfer_line_id] = {
-          quantity_received: line.quantity_sent,
+          quantity_received: String(line.quantity_sent),
           shortage_reason_code_id: '',
           shortage_note: '',
         };
@@ -246,14 +250,13 @@ export default function IncomingTransfers() {
 
   return (
     <AppLayout>
-      <div className="mx-auto w-full max-w-6xl space-y-6 p-4 md:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="incoming-transfers-page">
+        <div className="incoming-page-header">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              Incoming Transfers
-            </h1>
-            <p className="mt-1 text-sm text-gray-600">
-              Review stock sent to your location and record the quantities received.
+            <h1>Incoming Transfers</h1>
+            <p>
+              Review stock sent to your location and record the quantities
+              received.
             </p>
           </div>
 
@@ -261,77 +264,75 @@ export default function IncomingTransfers() {
             type="button"
             onClick={() => void loadTransfers()}
             disabled={loading}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            className="incoming-refresh-button"
           >
             Refresh
           </button>
         </div>
 
         {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <div className="incoming-alert incoming-alert-error" role="alert">
             {error}
           </div>
         )}
 
         {success && (
-          <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">
+          <div className="incoming-alert incoming-alert-success" role="status">
             {success}
           </div>
         )}
 
-        <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Transfers awaiting receipt
-            </h2>
-            <span className="rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700">
+        <section className="incoming-panel">
+          <div className="incoming-panel-header">
+            <h2>Transfers awaiting receipt</h2>
+            <span className="incoming-pending-count">
               {transfers.length} pending
             </span>
           </div>
 
           {loading ? (
-            <p className="py-6 text-center text-sm text-gray-500">
+            <p className="incoming-empty-state">
               Loading incoming transfers...
             </p>
           ) : transfers.length === 0 ? (
-            <p className="py-6 text-center text-sm text-gray-500">
+            <p className="incoming-empty-state">
               There are no transfers waiting to be received.
             </p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[650px] text-left text-sm">
-                <thead className="border-b bg-gray-50 text-gray-600">
+            <div className="incoming-table-wrapper">
+              <table className="incoming-table">
+                <thead>
                   <tr>
-                    <th className="p-3">Transfer</th>
-                    <th className="p-3">From</th>
-                    <th className="p-3">Destination</th>
-                    <th className="p-3">Items</th>
-                    <th className="p-3">Dispatched</th>
-                    <th className="p-3">Action</th>
+                    <th>Transfer</th>
+                    <th>From</th>
+                    <th>Destination</th>
+                    <th>Items</th>
+                    <th>Dispatched</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody>
                   {transfers.map((transfer) => (
                     <tr key={transfer.transfer_id}>
-                      <td className="p-3 font-semibold text-gray-900">
+                      <td className="incoming-transfer-number">
                         {transfer.transfer_no}
                       </td>
-                      <td className="p-3">{transfer.from_location_name}</td>
-                      <td className="p-3">{transfer.to_location_name}</td>
-                      <td className="p-3">{transfer.line_count}</td>
-                      <td className="p-3">
+                      <td>{transfer.from_location_name}</td>
+                      <td>{transfer.to_location_name}</td>
+                      <td>{transfer.line_count}</td>
+                      <td>
                         {transfer.dispatched_at
                           ? new Date(transfer.dispatched_at).toLocaleString()
                           : '—'}
                       </td>
-                      <td className="p-3">
+                      <td>
                         <button
                           type="button"
                           onClick={() => void openTransfer(transfer.transfer_id)}
                           disabled={loadingDetails}
-                          className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                          className="incoming-view-button"
                         >
-                          View / Receive
+                          {loadingDetails ? 'Loading...' : 'View / Receive'}
                         </button>
                       </td>
                     </tr>
@@ -343,18 +344,17 @@ export default function IncomingTransfers() {
         </section>
 
         {selectedTransfer && (
-          <section className="space-y-5 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-            <div className="flex flex-wrap items-start justify-between gap-3">
+          <section className="incoming-panel incoming-receipt-panel">
+            <div className="incoming-receipt-header">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">
-                  Receive {selectedTransfer.transfer_no}
-                </h2>
-                <p className="mt-1 text-sm text-gray-600">
+                <h2>Receive {selectedTransfer.transfer_no}</h2>
+                <p className="incoming-route">
                   {selectedTransfer.from_location_name} →{' '}
                   {selectedTransfer.to_location_name}
                 </p>
+
                 {selectedTransfer.note && (
-                  <p className="mt-2 text-sm text-gray-600">
+                  <p className="incoming-transfer-note">
                     Note: {selectedTransfer.note}
                   </p>
                 )}
@@ -363,43 +363,52 @@ export default function IncomingTransfers() {
               <button
                 type="button"
                 onClick={() => setSelectedTransfer(null)}
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                className="incoming-close-button"
               >
                 Close
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="incoming-product-list">
               {selectedTransfer.lines.map((line) => {
                 const input = receiptLines[line.transfer_line_id];
+
                 const hasShortage =
                   input &&
                   /^\d+(?:\.\d+)?$/.test(input.quantity_received) &&
-                  compareDecimal(input.quantity_received, line.quantity_sent) < 0;
+                  compareDecimal(
+                    input.quantity_received,
+                    line.quantity_sent,
+                  ) < 0;
 
                 return (
                   <div
                     key={line.transfer_line_id}
-                    className="rounded-lg border border-gray-200 p-4"
+                    className="incoming-product-card"
                   >
-                    <div className="mb-3 flex flex-wrap justify-between gap-2">
+                    <div className="incoming-product-heading">
                       <div>
-                        <h3 className="font-semibold text-gray-900">
-                          {line.product_name}
-                        </h3>
-                        <p className="text-xs text-gray-500">
-                          SKU: {line.product_sku} · Unit: {line.unit_of_measure}
+                        <h3>{line.product_name}</h3>
+                        <p>
+                          SKU: {line.product_sku} · Unit:{' '}
+                          {line.unit_of_measure}
                         </p>
                       </div>
-                      <p className="text-sm text-gray-600">
+
+                      <p className="incoming-sent-quantity">
                         Sent: <strong>{line.quantity_sent}</strong>
                       </p>
                     </div>
 
-                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                    <label
+                      className="incoming-field-label"
+                      htmlFor={`received-${line.transfer_line_id}`}
+                    >
                       Actual quantity received
                     </label>
+
                     <input
+                      id={`received-${line.transfer_line_id}`}
                       type="number"
                       min="0"
                       step="any"
@@ -411,20 +420,26 @@ export default function IncomingTransfers() {
                           event.target.value,
                         )
                       }
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                      className="incoming-field"
                     />
 
                     {hasShortage && (
-                      <div className="mt-3 space-y-3 rounded-lg bg-amber-50 p-3">
-                        <p className="text-sm font-medium text-amber-800">
-                          Shortage: the missing quantity will be recorded as a write-off.
+                      <div className="incoming-shortage">
+                        <p className="incoming-shortage-message">
+                          Shortage: the missing quantity will be recorded as a
+                          write-off.
                         </p>
 
                         <div>
-                          <label className="mb-1 block text-sm font-medium text-gray-700">
+                          <label
+                            className="incoming-field-label"
+                            htmlFor={`reason-${line.transfer_line_id}`}
+                          >
                             Write-off reason
                           </label>
+
                           <select
+                            id={`reason-${line.transfer_line_id}`}
                             value={input.shortage_reason_code_id}
                             onChange={(event) =>
                               updateReceiptLine(
@@ -433,7 +448,7 @@ export default function IncomingTransfers() {
                                 event.target.value,
                               )
                             }
-                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                            className="incoming-field"
                           >
                             <option value="">Select a reason</option>
                             {reasonCodes.map((reason) => (
@@ -448,10 +463,15 @@ export default function IncomingTransfers() {
                         </div>
 
                         <div>
-                          <label className="mb-1 block text-sm font-medium text-gray-700">
+                          <label
+                            className="incoming-field-label"
+                            htmlFor={`shortage-note-${line.transfer_line_id}`}
+                          >
                             Shortage explanation
                           </label>
+
                           <textarea
+                            id={`shortage-note-${line.transfer_line_id}`}
                             rows={2}
                             value={input.shortage_note}
                             onChange={(event) =>
@@ -461,7 +481,7 @@ export default function IncomingTransfers() {
                                 event.target.value,
                               )
                             }
-                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                            className="incoming-field incoming-textarea"
                             placeholder="Explain the missing stock..."
                           />
                         </div>
@@ -472,20 +492,21 @@ export default function IncomingTransfers() {
               })}
             </div>
 
-            <div className="flex flex-wrap justify-end gap-3 border-t pt-4">
+            <div className="incoming-receipt-actions">
               <button
                 type="button"
                 onClick={() => setSelectedTransfer(null)}
                 disabled={submitting}
-                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                className="incoming-cancel-button"
               >
                 Cancel
               </button>
+
               <button
                 type="button"
                 onClick={() => void submitReceipt()}
                 disabled={submitting}
-                className="rounded-lg bg-green-600 px-5 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+                className="incoming-confirm-button"
               >
                 {submitting ? 'Processing...' : 'Confirm Receipt'}
               </button>
