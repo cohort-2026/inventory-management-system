@@ -34,6 +34,7 @@ const NAV_ITEMS = [
   { label: "Suppliers", path: "/suppliers", icon: Truck },
   { label: "Receiving", path: "/receiving", icon: ClipboardList },
   { label: "Settings", path: "/settings", icon: Settings },
+  { label: "Incoming Transfers", path: "/incoming-transfers", icon: ArrowLeftRight },
 ];
 
 export default function Sidebar() {
